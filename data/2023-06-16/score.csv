@@ -1,4 +1,4 @@
-model,vicuna_elo
+model,lmsys_elo
 lmsys/vicuna-7B,1007
 lmsys/vicuna-13B,1054
 tatsu-lab/alpaca-7B,NaN

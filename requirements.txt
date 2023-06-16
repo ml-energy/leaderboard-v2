@@ -1,2 +1,2 @@
-plotly
+plotly==5.15.0
 gradio==3.23.0
