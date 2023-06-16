@@ -1,6 +1,0 @@
-model,score,throughput,response_length,latency,energy
-lmsys/vicuna-13B,1054,19.47,178.71,10.37,12
-lmsys/vicuna-7B,1007,31.26,217.33,7.71,32
-metaai/llama-13B,854,18.49,390.9,22.74,24
-lmsys/fastchat-t5-3B,941,31.98,131.12,6.09,4
-BlinkDL/rwkv-7B,928,23.09,239.98,9.62,12
