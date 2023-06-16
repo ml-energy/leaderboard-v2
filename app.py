@@ -76,7 +76,7 @@ def launch(file_path):
         # img = gr.Image(logo_path,shape=[1,2]).style( rounded=False)
 
         gr.Markdown(f"""
-                    # 🦙💦SpitFight - Leaderboard for LLM 
+                    # ML.ENERGY Leaderboard
                     """)
         with gr.Tabs():
             with gr.TabItem("Leaderboard"):
