@@ -1,0 +1,21 @@
+name: Push to Hugging Face Space
+on:
+  push:
+    branches:
+      - web
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    if: github.event.repository.fork == false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+          ref: web
+      - name: Push to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: git push https://jaywonchung:$HF_TOKEN@huggingface.co/spaces/symbioticlab/ml-energy-leaderboard web:main
