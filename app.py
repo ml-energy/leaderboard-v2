@@ -95,5 +95,4 @@ with block:
 
     block.load(get_blocks_party_spaces_with_formula, inputs=None, outputs=data)
 
-block.launch(share=True)
-# block.launch( )
+block.launch( )
