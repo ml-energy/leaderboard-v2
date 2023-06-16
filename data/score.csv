@@ -1,0 +1,13 @@
+model,vicuna_elo
+lmsys/vicuna-7B,1007
+lmsys/vicuna-13B,1054
+tatsu-lab/alpaca-7B,NaN
+metaai/llama-7B,NaN
+metaai/llama-13B,854
+camel-ai/CAMEL-13B-Combined-Data,NaN
+BlinkDL/RWKV-4-Raven-7B-v12-Eng98%-Other2%-20230521-ctx8192.pth,NaN
+databricks/dolly-v2-12b,866
+FreedomIntelligence/phoenix-inst-chat-7b,NaN
+h2oai/h2ogpt-gm-oasst1-en-2048-open-llama-7b-preview-300bt-v2,NaN
+lmsys/fastchat-t5-3b-v1.0,941
+Neutralzz/BiLLa-7B-SFT,NaN
