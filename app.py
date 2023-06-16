@@ -66,8 +66,7 @@ class TableManager:
     def merge_model_score(self):
         df1 = pd.read_csv(f'{self.file_path}/score.csv')
         df2 = pd.read_csv(f'{self.file_path}/benchmark.csv')
-        return   pd.merge(df1, df2, on='model')
-
+        return pd.merge(df1, df2, on='model').round(2)
 
 def launch(file_path):
     table_manager = TableManager(file_path)
