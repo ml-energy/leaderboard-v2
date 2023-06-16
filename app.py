@@ -1,23 +1,20 @@
 import gradio as gr
 import requests
 import pandas as pd
-from huggingface_hub.hf_api import SpaceInfo
 import matplotlib.pyplot as plt
 import plotly.express as px
-
-# model_perf_table = "data/test.csv"
-# logo_path = "img/image.png"
+import argparse
 
 
 class TableManager:
-    def __init__(self, model_perf_table="data/test.csv"):
-        self.model_perf_table = model_perf_table
-        self.df = self.get_blocks_party_spaces()
+    def __init__(self, file_path="data/test.csv"):
+        self.file_path = file_path
+        self.df = self.merge_model_score()
 
-    def get_blocks_party_spaces(self):
-        df = pd.read_csv(self.model_perf_table)
-        df = df.sort_values(by=['score'], ascending=False)
-        return df
+    # def get_blocks_party_spaces(self):
+    #     df = pd.read_csv(self.model_perf_table)
+    #     df = df.sort_values(by=['score'], ascending=False)
+    #     return df
 
     def get_blocks_party_spaces_with_formula(self, formula=None):
         if formula:
@@ -29,10 +26,9 @@ class TableManager:
         return self.df
 
     def get_dropdown(self ):
-
-        self.dropdown = [gr.inputs.Dropdown(choices=self.get_blocks_party_spaces().columns.tolist()[1:], label="X-axis"),
-                             gr.inputs.Dropdown(choices=self.get_blocks_party_spaces().columns.tolist()[1:], label="Y-axis"),
-                             gr.inputs.Dropdown(choices=[None]+self.get_blocks_party_spaces().columns.tolist()[1:], label="Z-axis (Optional)")]
+        self.dropdown = [gr.inputs.Dropdown(choices=self.df.columns.tolist()[1:], label="X-axis"),
+                             gr.inputs.Dropdown(choices=self.df.columns.tolist()[1:], label="Y-axis"),
+                             gr.inputs.Dropdown(choices=[None]+self.df.columns.tolist()[1:], label="Z-axis (Optional)")]
         return self.dropdown
 
     def generate_dropdown(self):
@@ -67,9 +63,14 @@ class TableManager:
             )
         return fig
 
+    def merge_model_score(self):
+        df1 = pd.read_csv(f'{self.file_path}/score.csv')
+        df2 = pd.read_csv(f'{self.file_path}/benchmark.csv')
+        return   pd.merge(df1, df2, on='model')
 
-def launch():
-    table_manager = TableManager()
+
+def launch(file_path):
+    table_manager = TableManager(file_path)
     block = gr.Blocks()
     with block:
         # gr.outputs.HTML(f'<img src="{logo_path}" alt="logo" height="1000px">')
@@ -102,11 +103,11 @@ def launch():
             with gr.TabItem("About"):
                 gr.Markdown(f"""
                             ## Metrics: 
-                            - **Human Score**: The average score given by human evaluators.
-                            - **Throughput**: The number of tokens generated per second.
-                            - **Verbosity**: The average number of generated tokens in the model's response.
+                            - **Elo Score**: The elo score given by lmsys.
+                            - **Throughput**: The average number of tokens generated per second.
+                            - **Response Length**: The average number of generated tokens in the model's response.
                             - **Latency**: The average time it takes for the model to generate a response.
-                            - **Memory**: The base memory usage of the model.
+                            - **Energy**: The average energy consumption of one prompy.
                             """)
         # running the function on page load in addition to when the button is clicked
         block.load(table_manager.get_blocks_party_spaces_with_formula, inputs=None, outputs=data)
@@ -116,4 +117,8 @@ def launch():
 
 
 if __name__ == "__main__":
-    launch()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--metric-file", type=str, default='data/2023-06-16')
+    args = parser.parse_args()
+    launch(args.metric_file)
