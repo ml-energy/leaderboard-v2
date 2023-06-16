@@ -1,5 +1,2 @@
-zeus-ml
-fschat==0.2.14
-rwkv==0.7.5
-einops
-tyro
+plotly
+gradio==3.23.0
