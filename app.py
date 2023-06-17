@@ -45,6 +45,10 @@ class TableManager:
                 counter += 1
             column_name = f"custom{counter}"
 
+        # If the user did not provide a formula, return an error message.
+        if not formula:
+            return self.df, format_msg("Please enter a formula.")
+
         # If there is an equal sign in the formula, `df.eval` will
         # return an entire DataFrame with the new column, instead of
         # just the new column. This is not what we want, so we check
