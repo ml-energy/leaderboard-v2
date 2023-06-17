@@ -1,0 +1,102 @@
+{
+    "lmsys/vicuna-7B": {
+        "url": "https://lmsys.org/blog/2023-03-30-vicuna/",
+        "nickname": "LMSys/vicuna-7B",
+        "params": 7
+    },
+    "lmsys/vicuna-13B": {
+        "url": "https://lmsys.org/blog/2023-03-30-vicuna/",
+        "nickname": "LMSys/vicuna-13B",
+        "params": 13
+    },
+    "tatsu-lab/alpaca-7B": {
+        "url": "https://huggingface.co/tatsu-lab/alpaca-7b-wdiff",
+        "nickname": "tatsu-lab/alpaca-7B",
+        "params": 7
+    },
+    "metaai/llama-7B": {
+        "url": "https://github.com/facebookresearch/llama",
+        "nickname": "MetaAI/LLaMA-7B",
+        "params": 7
+    },
+    "metaai/llama-13B": {
+        "url": "https://github.com/facebookresearch/llama",
+        "nickname": "MetaAI/LLaMA-13B",
+        "params": 13
+    },
+    "camel-ai/CAMEL-13B-Combined-Data": {
+        "url": "https://huggingface.co/camel-ai/CAMEL-13B-Combined-Data",
+        "nickname": "Camel-AI/CAMEL-13B-Combined-Data",
+        "params": 13
+    },
+    "BlinkDL/RWKV-4-Raven-7B-v12-Eng98%-Other2%-20230521-ctx8192.pth": {
+        "url": "https://huggingface.co/BlinkDL/rwkv-4-raven",
+        "nickname": "BlinkDL/RWKV-4-Raven-7B",
+        "params": 7
+    },
+    "databricks/dolly-v2-12b": {
+        "url": "https://huggingface.co/databricks/dolly-v2-12b",
+        "nickname": "databricks/dolly-v2-12B",
+        "params": 12
+    },
+    "FreedomIntelligence/phoenix-inst-chat-7b": {
+        "url": "https://huggingface.co/FreedomIntelligence/phoenix-inst-chat-7b",
+        "nickname": "FreedomIntelligence/phoenix-inst-chat-7b",
+        "params": 7
+    },
+    "h2oai/h2ogpt-gm-oasst1-en-2048-open-llama-7b-preview-300bt-v2": {
+        "url": "https://huggingface.co/h2oai/h2ogpt-gm-oasst1-en-2048-open-llama-7b-preview-300bt-v2",
+        "nickname": "H2OAI/H2OGPT-oasst1-7B",
+        "params": 7
+    },
+    "lmsys/fastchat-t5-3b-v1.0": {
+        "url": "https://huggingface.co/lmsys/fastchat-t5-3b-v1.0",
+        "nickname": "LMSys/fastchat-t5-3b-v1.0",
+        "params": 3
+    },
+    "Neutralzz/BiLLa-7B-SFT": {
+        "url": "https://huggingface.co/Neutralzz/BiLLa-7B-SFT",
+        "nickname": "Neutralzz/BiLLa-7B-SFT",
+        "params": 7
+    },
+    "nomic-ai/gpt4all-13b-snoozy": {
+        "url": "https://huggingface.co/nomic-ai/gpt4all-13b-snoozy",
+        "nickname": "nomic-ai/gpt4all-13b-snoozy",
+        "params": 13
+    },
+    "openaccess-ai-collective/manticore-13b-chat-pyg": {
+        "url": "https://huggingface.co/openaccess-ai-collective/manticore-13b-chat-pyg",
+        "nickname": "openaccess-ai-collective/manticore-13b-chat-pyg",
+        "params": 13
+    },
+    "OpenAssistant/oasst-sft-1-pythia-12b": {
+        "url": "https://huggingface.co/OpenAssistant/oasst-sft-1-pythia-12b",
+        "nickname": "OpenAssistant/oasst-sft-1-pythia-12b",
+        "params": 12
+    },
+    "project-baize/baize-v2-7B": {
+        "url": "https://huggingface.co/project-baize/baize-v2-7B",
+        "nickname": "project-baize/baize-v2-7B",
+        "params": 7
+    },
+    "BAIR/koala-7b": {
+        "url": "https://bair.berkeley.edu/blog/2023/04/03/koala/",
+        "nickname": "BAIR/koala-7b",
+        "params": 7
+    },
+    "BAIR/koala-13b": {
+        "url": "https://bair.berkeley.edu/blog/2023/04/03/koala/",
+        "nickname": "BAIR/koala-13b",
+        "params": 13
+    },
+    "StabilityAI/stablelm-tuned-alpha-7b": {
+        "url": "https://huggingface.co/StabilityAI/stablelm-tuned-alpha-7b",
+        "nickname": "StabilityAI/stablelm-tuned-alpha-7b",
+        "params": 7
+    },
+    "togethercomputer/RedPajama-INCITE-7B-Chat": {
+        "url": "https://huggingface.co/togethercomputer/RedPajama-INCITE-7B-Chat",
+        "nickname": "togethercomputer/RedPajama-INCITE-7B-Chat",
+        "params": 7
+    }
+}
