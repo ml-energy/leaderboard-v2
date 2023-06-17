@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 
 import gradio as gr
 import pandas as pd
@@ -27,13 +28,33 @@ def format_msg(text: str) -> str:
 class TableManager:
     def __init__(self, data_dir: str) -> None:
         """Load leaderboard data from CSV files in data_dir."""
+        # Load and merge CSV files.
         df1 = pd.read_csv(f"{data_dir}/score.csv")
         df2 = pd.read_csv(f"{data_dir}/benchmark.csv")
-        self.df = pd.merge(df1, df2, on="model").round(2)
+        df = pd.merge(df1, df2, on="model").round(2)
+        
+        # Make the first column (model) a HTML anchor to the model's website.
+        models = json.load(open(f"{data_dir}/models.json"))
+        def format_model_link(model_name: str) -> str:
+            link = models[model_name]
+            return (
+                f'<a style="text-decoration: underline; text-decoration-style: dotted" '
+                f'target="_blank" href="{link}">{model_name}</a>'
+            )
+        df["model"] = df["model"].apply(format_model_link)
+
+        # Sort by energy.
+        df = df.sort_values(by="energy", ascending=True)
+
+        self.df = df
 
     def get_df(self):
         """Return the leaderboard Pandas DataFrame."""
         return self.df
+
+    def get_datatypes(self):
+        """Return the datatypes of the leaderboard Pandas DataFrame."""
+        return ["markdown"] + ["str"] * (len(self.df.columns) - 1)
 
     def add_column(self, column_name: str, formula: str):
         """Create and add a new column with the given formula."""
@@ -118,33 +139,44 @@ global_tbm = TableManager(f"data/{latest_date}")
 
 # Some custon CSS.
 css = """
-.logo {
+/* Make ML.ENERGY look like a clickable logo. */
+.text-logo {
     color: #27cb63 !important;
     text-decoration: none !important;
 }
 
-.plotly > div {
-    margin: auto !important;
-}
-
+/* Make the submit button the same color as the logo. */
 .btn-submit {
     background: #27cb63 !important;
     color: white !important;
     border: 0 !important;
+}
+
+/* Center the plotly plot inside its container. */
+.plotly > div {
+    margin: auto !important;
+}
+
+/* Limit the width of the first column to 300 px. */
+table td:first-child,
+table th:first-child {
+    max-width: 300px;
+    overflow: auto;
+    white-space: nowrap;
 }
 """
 
 block = gr.Blocks(css=css)
 with block:
     tbm = gr.State(global_tbm)  # type: ignore
-    gr.HTML("<h1><a href='https://ml.energy' class='logo'>ML.ENERGY</a> Leaderboard</h1>")
+    gr.HTML("<h1><a href='https://ml.energy' class='text-logo'>ML.ENERGY</a> Leaderboard</h1>")
 
     with gr.Tabs():
         # Tab 1: Leaderboard.
         with gr.TabItem("Leaderboard"):
             # Block 1: Leaderboard table.
             with gr.Row():
-                data = gr.Dataframe(type="pandas")
+                data = gr.Dataframe(type="pandas", datatype=global_tbm.get_datatypes())
 
             # Block 2: Allow userse to new columns.
             with gr.Row():
