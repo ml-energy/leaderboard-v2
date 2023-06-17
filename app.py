@@ -158,13 +158,22 @@ function format_model_link() {{
     for (let index = 1; index <= {len(global_tbm.get_df())}; index++) {{
         // Get the cell.
         var cell = document.querySelector(`#tab-leaderboard > div > div > div > table > tbody > tr:nth-child(${{index}}) > td:nth-child(1) > div > span`);
+        // This check exists to make this function idempotent.
+        // Multiple changes to the Dataframe component may invoke this function,
+        // including adding columns, sorting based on a column, etc.
+        // Thus, we check whether we already formatted the model names by seeing
+        // whether the child of the cell is a text node. If it is not, we skip
+        // it means we already parsed it into HTML, so we should just return.
+        if (cell.firstChild.nodeType != 3) break;
 
         // Decode and interpret the innerHTML of the cell as HTML.
+        var decoded_string = new DOMParser().parseFromString(cell.innerHTML, "text/html").documentElement.textContent;
         var temp = document.createElement("template");
-        temp.innerHTML = new DOMParser().parseFromString(cell.innerHTML, "text/html").documentElement.textContent;
+        temp.innerHTML = decoded_string;
+        var model_anchor = temp.content.firstChild;
 
         // Replace the innerHTML of the cell with the interpreted HTML.
-        cell.replaceChildren(temp.content.firstChild);
+        cell.replaceChildren(model_anchor);
     }}
 
     // Return all arguments as is.
@@ -211,7 +220,8 @@ with block:
         with gr.TabItem("Leaderboard"):
             # Block 1: Leaderboard table.
             with gr.Row():
-                dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")#, datatype=global_tbm.get_datatypes())
+                dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")
+                dataframe.change(None, None, None, _js=js)
 
             # Block 2: Allow userse to new columns.
             with gr.Row():
@@ -226,9 +236,9 @@ with block:
                         clear_input_btn = gr.Button("Clear")
             with gr.Row():
                 add_col_message = gr.HTML("")
-            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message], _js=js)
-            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message], _js=js)
-            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message]).then(None, None, None, _js=js)
+            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])#, _js=js)
+            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])#, _js=js)
+            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])#.then(None, None, None, _js=js)
             clear_input_btn.click(lambda: (None, None, None), None, outputs=[colname_input, formula_input, add_col_message])
 
             # Block 3: Allow users to plot 2D and 3D scatter plots.
@@ -277,6 +287,6 @@ with block:
             gr.Markdown(about)
 
     # Load the table on page load.
-    block.load(TableManager.get_df, inputs=tbm, outputs=dataframe).then(None, None, None, _js=js)
+    block.load(TableManager.get_df, inputs=tbm, outputs=dataframe)#.then(None, None, None, _js=js)
 
 block.launch()
