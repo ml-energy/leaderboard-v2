@@ -20,11 +20,6 @@ about = """
 """
 
 
-def format_msg(text: str) -> str:
-    """Formats into HTML that prints in Monospace font."""
-    return f"<pre style='font-family: monospace'>{text}</pre>"
-
-
 class TableManager:
     def __init__(self, data_dir: str) -> None:
         """Load leaderboard data from CSV files in data_dir."""
@@ -32,14 +27,18 @@ class TableManager:
         df1 = pd.read_csv(f"{data_dir}/score.csv")
         df2 = pd.read_csv(f"{data_dir}/benchmark.csv")
         df = pd.merge(df1, df2, on="model").round(2)
+        models = json.load(open(f"{data_dir}/models.json"))
+
+        # Add the #params column.
+        df["parameters (B)"] = df["model"].apply(lambda x: models[x]["params"])
         
         # Make the first column (model) a HTML anchor to the model's website.
-        models = json.load(open(f"{data_dir}/models.json"))
         def format_model_link(model_name: str) -> str:
-            link = models[model_name]
+            url = models[model_name]["url"]
+            nickname = models[model_name]["nickname"]
             return (
                 f'<a style="text-decoration: underline; text-decoration-style: dotted" '
-                f'target="_blank" href="{link}">{model_name}</a>'
+                f'target="_blank" href="{url}">{nickname}</a>'
             )
         df["model"] = df["model"].apply(format_model_link)
 
@@ -54,28 +53,33 @@ class TableManager:
 
     def get_datatypes(self):
         """Return the datatypes of the leaderboard Pandas DataFrame."""
-        return ["markdown"] + ["str"] * (len(self.df.columns) - 1)
+        return ["markdown"] + ["number"] * (len(self.df.columns) - 1)
+        # return "markdown"
+
+    def _format_msg(self, text: str) -> str:
+        """Formats into HTML that prints in Monospace font."""
+        return f"<pre style='font-family: monospace'>{text}</pre>"
 
     def add_column(self, column_name: str, formula: str):
         """Create and add a new column with the given formula."""
+
         # If the user did not provide the name of the new column,
         # generate a unique name for them.
         if not column_name:
             counter = 1
-            while f"custom{counter}" in self.df.columns:
+            while (column_name := f"custom{counter}") in self.df.columns:
                 counter += 1
-            column_name = f"custom{counter}"
 
         # If the user did not provide a formula, return an error message.
         if not formula:
-            return self.df, format_msg("Please enter a formula.")
+            return self.df, self._format_msg("Please enter a formula.")
 
         # If there is an equal sign in the formula, `df.eval` will
         # return an entire DataFrame with the new column, instead of
         # just the new column. This is not what we want, so we check
         # for this case and return an error message.
         if "=" in formula:
-            return self.df, format_msg("Invalid formula: expr cannot contain '='.")
+            return self.df, self._format_msg("Invalid formula: expr cannot contain '='.")
 
         # The user may want to update an existing column.
         verb = "Updated" if column_name in self.df.columns else "Added"
@@ -87,8 +91,8 @@ class TableManager:
                 col = col.round(2)
             self.df[column_name] = col
         except Exception as exc:
-            return self.df, format_msg(f"Invalid formula: {exc}")
-        return self.df, format_msg(f"{verb} column '{column_name}'.")
+            return self.df, self._format_msg(f"Invalid formula: {exc}")
+        return self.df, self._format_msg(f"{verb} column '{column_name}'.")
 
     def get_dropdown(self):
         columns = self.df.columns.tolist()[1:]
@@ -106,7 +110,7 @@ class TableManager:
     def plot_scatter(self, width, height, x, y, z):
         # The user did not select either x or y.
         if not x or not y:
-            return None, width, height, format_msg("Please select both X and Y.")
+            return None, width, height, self._format_msg("Please select both X and Y.")
 
         # Width and height may be an empty string. Then we set them to 600.
         if not width and not height:
@@ -118,13 +122,15 @@ class TableManager:
         try:
             width, height = int(width), int(height)
         except ValueError:
-            return None, width, height, format_msg("Width and height should be positive integers.")
+            return None, width, height, self._format_msg("Width and height should be positive integers.")
 
+        # Strip the <a> tag from model names.
+        text = self.df["model"].apply(lambda x: x.split(">")[1].split("<")[0])
         if z is None or z == "None" or z == "":
-            fig = px.scatter(self.df, x=x, y=y, text=self.df["model"])
+            fig = px.scatter(self.df, x=x, y=y, text=text)
             fig.update_traces(textposition="top center")
         else:
-            fig = px.scatter_3d(self.df, x=x, y=y, z=z, text=self.df["model"])
+            fig = px.scatter_3d(self.df, x=x, y=y, z=z, text=text)
             fig.update_traces(textposition="top center")
 
         fig.update_layout(width=width, height=height)
@@ -137,7 +143,36 @@ class TableManager:
 latest_date = sorted(os.listdir("data/"))[-1]
 global_tbm = TableManager(f"data/{latest_date}")
 
-# Some custon CSS.
+# Custom JS.
+# XXX: This is a hack to make the model names clickable.
+#      Ideally, we should set `datatype` in the constructor of `gr.DataFrame` to
+#      `["markdown"] + ["number"] * (len(df.columns) - 1)` and format models names
+#      as an HTML <a> tag. However, because we also want to dynamically add new
+#      columns to the table and Gradio < 4.0 does not support updating `datatype` with
+#      `gr.DataFrame.update` yet, we need to manually walk into the DOM and replace
+#      the innerHTML of the model name cells with dynamically interpreted HTML.
+#      Desired feature tracked at https://github.com/gradio-app/gradio/issues/3732
+js = f"""
+function format_model_link() {{
+    // Iterate over the cells of the first column of the leaderboard table.
+    for (let index = 1; index <= {len(global_tbm.get_df())}; index++) {{
+        // Get the cell.
+        var cell = document.querySelector(`#tab-leaderboard > div > div > div > table > tbody > tr:nth-child(${{index}}) > td:nth-child(1) > div > span`);
+
+        // Decode and interpret the innerHTML of the cell as HTML.
+        var temp = document.createElement("template");
+        temp.innerHTML = new DOMParser().parseFromString(cell.innerHTML, "text/html").documentElement.textContent;
+
+        // Replace the innerHTML of the cell with the interpreted HTML.
+        cell.replaceChildren(temp.content.firstChild);
+    }}
+
+    // Return all arguments as is.
+    return arguments
+}}
+"""
+
+# Custom CSS.
 css = """
 /* Make ML.ENERGY look like a clickable logo. */
 .text-logo {
@@ -176,7 +211,7 @@ with block:
         with gr.TabItem("Leaderboard"):
             # Block 1: Leaderboard table.
             with gr.Row():
-                data = gr.Dataframe(type="pandas", datatype=global_tbm.get_datatypes())
+                dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")#, datatype=global_tbm.get_datatypes())
 
             # Block 2: Allow userse to new columns.
             with gr.Row():
@@ -191,9 +226,9 @@ with block:
                         clear_input_btn = gr.Button("Clear")
             with gr.Row():
                 add_col_message = gr.HTML("")
-            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[data, add_col_message])
-            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[data, add_col_message])
-            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[data, add_col_message])
+            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message], _js=js)
+            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message], _js=js)
+            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message]).then(None, None, None, _js=js)
             clear_input_btn.click(lambda: (None, None, None), None, outputs=[colname_input, formula_input, add_col_message])
 
             # Block 3: Allow users to plot 2D and 3D scatter plots.
@@ -242,6 +277,6 @@ with block:
             gr.Markdown(about)
 
     # Load the table on page load.
-    block.load(TableManager.get_df, inputs=tbm, outputs=data)
+    block.load(TableManager.get_df, inputs=tbm, outputs=dataframe).then(None, None, None, _js=js)
 
 block.launch()
