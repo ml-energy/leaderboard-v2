@@ -157,12 +157,15 @@ function format_model_link() {{
     // Iterate over the cells of the first column of the leaderboard table.
     for (let index = 1; index <= {len(global_tbm.get_df())}; index++) {{
         // Get the cell.
-        var cell = document.querySelector(`#tab-leaderboard > div > div > div > table > tbody > tr:nth-child(${{index}}) > td:nth-child(1) > div > span`);
+        var cell = document.querySelector(
+            `#tab-leaderboard > div > div > div > table > tbody > tr:nth-child(${{index}}) > td:nth-child(1) > div > span`
+        );
+
         // This check exists to make this function idempotent.
         // Multiple changes to the Dataframe component may invoke this function,
-        // including adding columns, sorting based on a column, etc.
+        // multiple times to the same HTML table (e.g., adding and sorting cols).
         // Thus, we check whether we already formatted the model names by seeing
-        // whether the child of the cell is a text node. If it is not, we skip
+        // whether the child of the cell is a text node. If it is not,
         // it means we already parsed it into HTML, so we should just return.
         if (cell.firstChild.nodeType != 3) break;
 
