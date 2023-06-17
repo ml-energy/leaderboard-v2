@@ -1,123 +1,211 @@
+from __future__ import annotations
+
+import os
+
 import gradio as gr
-import requests
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.io as pio
 import plotly.express as px
-import argparse
+pio.templates.default = "plotly_white"
+
+
+about = """
+## Metrics: 
+- **Elo Score**: The elo score given by lmsys.
+- **Throughput**: The average number of tokens generated per second.
+- **Response Length**: The average number of generated tokens in the model's response.
+- **Latency**: The average time it takes for the model to generate a response.
+- **Energy**: The average energy consumption of one prompy.
+"""
+
+
+def format_msg(text: str) -> str:
+    """Formats into HTML that prints in Monospace font."""
+    return f"<pre style='font-family: monospace'>{text}</pre>"
 
 
 class TableManager:
-    def __init__(self, file_path="data/test.csv"):
-        self.file_path = file_path
-        self.df = self.merge_model_score()
+    def __init__(self, data_dir: str) -> None:
+        """Load leaderboard data from CSV files in data_dir."""
+        df1 = pd.read_csv(f"{data_dir}/score.csv")
+        df2 = pd.read_csv(f"{data_dir}/benchmark.csv")
+        self.df = pd.merge(df1, df2, on="model").round(2)
 
-    # def get_blocks_party_spaces(self):
-    #     df = pd.read_csv(self.model_perf_table)
-    #     df = df.sort_values(by=['score'], ascending=False)
-    #     return df
-
-    def get_blocks_party_spaces_with_formula(self, formula=None):
-        if formula:
-            try:
-                self.df[str(formula)] = self.df.eval(formula)
-                self.generate_dropdown_attr()
-            except:
-                pass # Handle this error properly in your code
+    def get_df(self):
+        """Return the leaderboard Pandas DataFrame."""
         return self.df
 
-    def get_dropdown(self ):
-        self.dropdown = [gr.inputs.Dropdown(choices=self.df.columns.tolist()[1:], label="X-axis"),
-                             gr.inputs.Dropdown(choices=self.df.columns.tolist()[1:], label="Y-axis"),
-                             gr.inputs.Dropdown(choices=[None]+self.df.columns.tolist()[1:], label="Z-axis (Optional)")]
-        return self.dropdown
+    def add_column(self, column_name: str, formula: str):
+        """Create and add a new column with the given formula."""
+        # If the user did not provide the name of the new column,
+        # generate a unique name for them.
+        if not column_name:
+            counter = 1
+            while f"custom{counter}" in self.df.columns:
+                counter += 1
+            column_name = f"custom{counter}"
 
-    def generate_dropdown(self):
-        return gr.Dropdown.update(choices=  self.df.columns.tolist()[1:] ), \
-               gr.Dropdown.update(choices=  self.df.columns.tolist()[1:] ), \
-               gr.Dropdown.update(choices=  self.df.columns.tolist()[1:] )
+        # If there is an equal sign in the formula, `df.eval` will
+        # return an entire DataFrame with the new column, instead of
+        # just the new column. This is not what we want, so we check
+        # for this case and return an error message.
+        if "=" in formula:
+            return self.df, format_msg("Invalid formula: expr cannot contain '='.")
 
-    def create_scatter(self, x, y, z):
-        if z is None or z == 'None' or z == '':
-            fig, ax = plt.subplots()
+        # The user may want to update an existing column.
+        verb = "Updated" if column_name in self.df.columns else "Added"
 
-            ax.scatter(list(self.df[x]),list(self.df[y]), marker='o', s=50, c='blue')
-            for i, label in enumerate(list(self.df['model'])):
-                ax.text(list(self.df[x])[i],list(self.df[y])[i],str(label))
-            ax.set_xlabel(x)
-            ax.set_ylabel(y)
+        # Evaluate the formula and catch any error.
+        try:
+            col = self.df.eval(formula)
+            if isinstance(col, pd.Series):
+                col = col.round(2)
+            self.df[column_name] = col
+        except Exception as exc:
+            return self.df, format_msg(f"Invalid formula: {exc}")
+        return self.df, format_msg(f"{verb} column '{column_name}'.")
 
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
+    def get_dropdown(self):
+        columns = self.df.columns.tolist()[1:]
+        return [
+            gr.Dropdown(choices=columns, label="X"),
+            gr.Dropdown(choices=columns, label="Y"),
+            gr.Dropdown(choices=columns, label="Z (optional)"),
+        ]
 
+    def update_dropdown(self):
+        columns = self.df.columns.tolist()[1:]
+        dropdown_update = gr.Dropdown.update(choices=columns)
+        return [dropdown_update] * 3
+
+    def plot_scatter(self, width, height, x, y, z):
+        # The user did not select either x or y.
+        if not x or not y:
+            return None, width, height, format_msg("Please select both X and Y.")
+
+        # Width and height may be an empty string. Then we set them to 600.
+        if not width and not height:
+            width, height = "600", "600"
+        elif not width:
+            width = height
+        elif not height:
+            height = width
+        try:
+            width, height = int(width), int(height)
+        except ValueError:
+            return None, width, height, format_msg("Width and height should be positive integers.")
+
+        if z is None or z == "None" or z == "":
+            fig = px.scatter(self.df, x=x, y=y, text=self.df["model"])
+            fig.update_traces(textposition="top center")
         else:
-            fig = px.scatter_3d(self.df, x=x, y=y, z=z, text=self.df['model'])
+            fig = px.scatter_3d(self.df, x=x, y=y, z=z, text=self.df["model"])
+            fig.update_traces(textposition="top center")
 
-            # Set axis labels and title
-            fig.update_layout(scene=dict(
-                xaxis_title=x,
-                yaxis_title=y,
-                zaxis_title=z,
-            ),
-                title='3D Scatter Plot'
+        fig.update_layout(width=width, height=height)
+
+        return fig, width, height, ""
+
+
+# Find the latest version of the CSV files in data/
+# and initialize the global TableManager.
+latest_date = sorted(os.listdir("data/"))[-1]
+global_tbm = TableManager(f"data/{latest_date}")
+
+# Some custon CSS.
+css = """
+.logo {
+    color: #27cb63 !important;
+    text-decoration: none !important;
+}
+
+.plotly > div {
+    margin: auto !important;
+}
+
+.btn-submit {
+    background: #27cb63 !important;
+    color: white !important;
+    border: 0 !important;
+}
+"""
+
+block = gr.Blocks(css=css)
+with block:
+    tbm = gr.State(global_tbm)  # type: ignore
+    gr.HTML("<h1><a href='https://ml.energy' class='logo'>ML.ENERGY</a> Leaderboard</h1>")
+
+    with gr.Tabs():
+        # Tab 1: Leaderboard.
+        with gr.TabItem("Leaderboard"):
+            # Block 1: Leaderboard table.
+            with gr.Row():
+                data = gr.Dataframe(type="pandas")
+
+            # Block 2: Allow userse to new columns.
+            with gr.Row():
+                with gr.Column(scale=3):
+                    with gr.Row():
+                        colname_input = gr.Textbox("power", lines=1, label="Custom column name")
+                        formula_input = gr.Textbox("energy/latency", lines=1, label="Formula")
+                with gr.Column(scale=1):
+                    with gr.Row():
+                        add_col_btn = gr.Button("Add to table (⏎)", elem_classes=["btn-submit"])
+                    with gr.Row():
+                        clear_input_btn = gr.Button("Clear")
+            with gr.Row():
+                add_col_message = gr.HTML("")
+            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[data, add_col_message])
+            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[data, add_col_message])
+            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[data, add_col_message])
+            clear_input_btn.click(lambda: (None, None, None), None, outputs=[colname_input, formula_input, add_col_message])
+
+            # Block 3: Allow users to plot 2D and 3D scatter plots.
+            with gr.Row():
+                with gr.Column(scale=3):
+                    with gr.Row():
+                        # Initialize the dropdown choices with the global TableManager with just the original columns.
+                        axis_dropdowns = global_tbm.get_dropdown()
+                with gr.Column(scale=1):
+                    with gr.Row():
+                        plot_btn = gr.Button("Plot", elem_classes=["btn-submit"])
+                    with gr.Row():
+                        clear_plot_btn = gr.Button("Clear")
+            with gr.Accordion("Plot size (600 x 600 by default)", open=False):
+                with gr.Row():
+                    plot_width_input = gr.Textbox("600", lines=1, label="Width (px)")
+                    plot_height_input = gr.Textbox("600", lines=1, label="Height (px)")
+            with gr.Row():
+                plot = gr.Plot()
+            with gr.Row():
+                plot_message = gr.HTML("")
+            add_col_btn.click(TableManager.update_dropdown, inputs=tbm, outputs=axis_dropdowns)  # type: ignore
+            plot_width_input.submit(
+                TableManager.plot_scatter,
+                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
+                outputs=[plot, plot_width_input, plot_height_input, plot_message],
             )
-        return fig
+            plot_height_input.submit(
+                TableManager.plot_scatter,
+                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
+                outputs=[plot, plot_width_input, plot_height_input, plot_message],
+            )
+            plot_btn.click(
+                TableManager.plot_scatter,
+                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
+                outputs=[plot, plot_width_input, plot_height_input, plot_message],
+            )
+            clear_plot_btn.click(
+                lambda: (None,) * 7,
+                None,
+                outputs=[*axis_dropdowns, plot, plot_width_input, plot_height_input, plot_message],
+            )
 
-    def merge_model_score(self):
-        df1 = pd.read_csv(f'{self.file_path}/score.csv')
-        df2 = pd.read_csv(f'{self.file_path}/benchmark.csv')
-        return pd.merge(df1, df2, on='model').round(2)
+        # Tab 2: About page.
+        with gr.TabItem("About"):
+            gr.Markdown(about)
 
-def launch(file_path):
-    table_manager = TableManager(file_path)
-    block = gr.Blocks()
-    with block:
-        # gr.outputs.HTML(f'<img src="{logo_path}" alt="logo" height="1000px">')
-        # img = gr.Image(logo_path,shape=[1,2]).style( rounded=False)
+    # Load the table on page load.
+    block.load(TableManager.get_df, inputs=tbm, outputs=data)
 
-        gr.Markdown(f"""
-                    # ML.ENERGY Leaderboard
-                    """)
-        with gr.Tabs():
-            with gr.TabItem("Leaderboard"):
-                with gr.Row():
-                    data = gr.outputs.Dataframe(type="pandas" )
-                with gr.Row():
-                    formula_input = gr.inputs.Textbox(lines=1, label="User Designed Column", placeholder = 'e.g. verbosity/latency')
-                    data_run = gr.Button("Add To Table")
-                    data_run.click(table_manager.get_blocks_party_spaces_with_formula, inputs=formula_input,
-                                   outputs=data)
-
-                with gr.Row():
-                    with gr.Column():
-                        scatter_input = table_manager.get_dropdown()
-
-                        data_run.click(table_manager.generate_dropdown, inputs=None, outputs=scatter_input)
-                        fig_run = gr.Button("Generate Figure")
-
-                    with gr.Column():
-                        gen_figure = gr.Plot()
-                        fig_run.click(table_manager.create_scatter, inputs=scatter_input, outputs=gen_figure)
-
-            with gr.TabItem("About"):
-                gr.Markdown(f"""
-                            ## Metrics: 
-                            - **Elo Score**: The elo score given by lmsys.
-                            - **Throughput**: The average number of tokens generated per second.
-                            - **Response Length**: The average number of generated tokens in the model's response.
-                            - **Latency**: The average time it takes for the model to generate a response.
-                            - **Energy**: The average energy consumption of one prompy.
-                            """)
-        # running the function on page load in addition to when the button is clicked
-        block.load(table_manager.get_blocks_party_spaces_with_formula, inputs=None, outputs=data)
-
-    # block.launch(share=True)
-    block.launch( )
-
-
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--metric-file", type=str, default='data/2023-06-16')
-    args = parser.parse_args()
-    launch(args.metric_file)
+block.launch()
