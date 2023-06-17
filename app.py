@@ -30,7 +30,7 @@ class TableManager:
         models = json.load(open(f"{data_dir}/models.json"))
 
         # Add the #params column.
-        df["parameters (B)"] = df["model"].apply(lambda x: models[x]["params"])
+        df["parameters"] = df["model"].apply(lambda x: models[x]["params"])
         
         # Make the first column (model) a HTML anchor to the model's website.
         def format_model_link(model_name: str) -> str:
