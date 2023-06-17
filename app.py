@@ -152,7 +152,7 @@ global_tbm = TableManager(f"data/{latest_date}")
 #      `gr.DataFrame.update` yet, we need to manually walk into the DOM and replace
 #      the innerHTML of the model name cells with dynamically interpreted HTML.
 #      Desired feature tracked at https://github.com/gradio-app/gradio/issues/3732
-js = f"""
+dataframe_update_js = f"""
 function format_model_link() {{
     // Iterate over the cells of the first column of the leaderboard table.
     for (let index = 1; index <= {len(global_tbm.get_df())}; index++) {{
@@ -221,7 +221,7 @@ with block:
             # Block 1: Leaderboard table.
             with gr.Row():
                 dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")
-                dataframe.change(None, None, None, _js=js)
+                dataframe.change(None, None, None, _js=dataframe_update_js)
 
             # Block 2: Allow userse to new columns.
             with gr.Row():
@@ -236,9 +236,9 @@ with block:
                         clear_input_btn = gr.Button("Clear")
             with gr.Row():
                 add_col_message = gr.HTML("")
-            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])#, _js=js)
-            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])#, _js=js)
-            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])#.then(None, None, None, _js=js)
+            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])
+            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])
+            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])
             clear_input_btn.click(lambda: (None, None, None), None, outputs=[colname_input, formula_input, add_col_message])
 
             # Block 3: Allow users to plot 2D and 3D scatter plots.
@@ -287,6 +287,6 @@ with block:
             gr.Markdown(about)
 
     # Load the table on page load.
-    block.load(TableManager.get_df, inputs=tbm, outputs=dataframe)#.then(None, None, None, _js=js)
+    block.load(TableManager.get_df, inputs=tbm, outputs=dataframe)
 
 block.launch()
