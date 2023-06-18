@@ -18,4 +18,7 @@ jobs:
       - name: Push to Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push https://jaywonchung:$HF_TOKEN@huggingface.co/spaces/symbioticlab/ml-energy-leaderboard web:main
+        run: |
+          for i in 1 2 3 4 5; do
+            git push https://jaywonchung:$HF_TOKEN@huggingface.co/spaces/symbioticlab/ml-energy-leaderboard web:main && break || sleep 5;
+          done
