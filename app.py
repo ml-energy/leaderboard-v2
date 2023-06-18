@@ -281,11 +281,12 @@ with block:
 
         # Tab 2: About page.
         with gr.TabItem("About"):
-            # Skip the YAML front matter in README.md.
+            # Skip the YAML front matter and title in README.md.
             lines = open("README.md").readlines()
             i = 0
             for i, line in enumerate(lines):
                 if line.startswith("# "):
+                    i += 2
                     break
             gr.Markdown("\n".join(lines[i:]))
 

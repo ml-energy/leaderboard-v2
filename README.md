@@ -11,7 +11,6 @@ pinned: true
 
 The goal of the ML.ENERGY Leaderboard is to give people a sense of how much **energy** LLMs would consume.
 
-
 ## How is energy different?
 
 Even between models with the exact same architecture and size, the average energy consumption per prompt is different because they have **different verbosity**.
