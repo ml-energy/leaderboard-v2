@@ -10,16 +10,6 @@ import plotly.express as px
 pio.templates.default = "plotly_white"
 
 
-about = """
-## Metrics: 
-- **Elo Score**: The elo score given by lmsys.
-- **Throughput**: The average number of tokens generated per second.
-- **Response Length**: The average number of generated tokens in the model's response.
-- **Latency**: The average time it takes for the model to generate a response.
-- **Energy**: The average energy consumption of one prompy.
-"""
-
-
 class TableManager:
     def __init__(self, data_dir: str) -> None:
         """Load leaderboard data from CSV files in data_dir."""
@@ -285,9 +275,19 @@ with block:
                 outputs=[*axis_dropdowns, plot, plot_width_input, plot_height_input, plot_message],
             )
 
+            # Block 4: Leaderboard date.
+            with gr.Row():
+                gr.HTML(f"<h3 style='color: gray'>Date: {latest_date}</h3>")
+
         # Tab 2: About page.
         with gr.TabItem("About"):
-            gr.Markdown(about)
+            # Skip the YAML front matter in README.md.
+            lines = open("README.md").readlines()
+            i = 0
+            for i, line in enumerate(lines):
+                if line.startswith("# "):
+                    break
+            gr.Markdown("\n".join(lines[i:]))
 
     # Load the table on page load.
     block.load(TableManager.get_df, inputs=tbm, outputs=dataframe)
