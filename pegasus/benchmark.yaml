@@ -1,5 +1,5 @@
 - command:
-    - docker exec leaderboard{{ gpu }} python scripts/benchmark.py --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json --model-path {{ model }}
+    - docker exec leaderboard{{ gpu }} python scripts/benchmark.py --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json --model-path {{ model }} --task {{ task }}
   model:
     - /data/leaderboard/weights/metaai/llama-7B
     - /data/leaderboard/weights/metaai/llama-13B
@@ -21,3 +21,8 @@
     - project-baize/baize-v2-7B
     - StabilityAI/stablelm-tuned-alpha-7b
     - togethercomputer/RedPajama-INCITE-7B-Chat
+  task:
+    - chat
+    - chat-concise
+    - instruct
+    - instruct-concise
