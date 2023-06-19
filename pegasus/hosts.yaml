@@ -1,0 +1,19 @@
+# Example:
+# Four 4-GPU nodes (node01 to node04), one container per GPU.
+# node01 and node02 have four GPUs, and hence four containers.
+# node03 and node04 have just two GPUs, and hence two containers.
+# With this configuration, 2 * 4 + 2 * 2 = 12 jobs will run in parallel.
+- hostname:
+    - node01
+    - node02
+  gpu:
+    - 0
+    - 1
+    - 2
+    - 3
+- hostname:
+    - node03
+    - node04
+  gpu:
+    - 0
+    - 1

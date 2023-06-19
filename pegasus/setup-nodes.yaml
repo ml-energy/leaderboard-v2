@@ -1,0 +1,2 @@
+- if [[ {{ gpu }} = 0 ]]; then cd workspace/leaderboard && docker build -t ml-energy:latest .; fi
+- docker run -dit --name leaderboard{{ gpu }} --gpus '"device={{ gpu }}"' -v /data/leaderboard:/data/leaderboard -v $HOME/workspace/leaderboard:/workspace/leaderboard ml-energy:latest bash

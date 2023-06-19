@@ -33,6 +33,10 @@ $ docker run -it \
 
 ## Running the benchmark
 
+We run benchmarks using multiple nodes and GPUs using [Pegasus](https://github.com/jaywonchung/pegasus). Take a look at [`pegasus/`](/pegasus) for details.
+
+You can still run benchmarks without Pegasus like this:
+
 ```console
 # Inside the container
 $ cd /workspace/leaderboard
