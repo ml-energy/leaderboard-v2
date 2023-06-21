@@ -7,7 +7,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ='America/Detroit'
 RUN apt-get update -qq \
     && apt-get -y --no-install-recommends install \
-       build-essential software-properties-common wget git tar rsync \
+       build-essential software-properties-common wget git tar rsync ninja-build \
     && apt-get clean all \
     && rm -r /var/lib/apt/lists/*
 
@@ -36,3 +36,5 @@ RUN cd leaderboard \
       && cd ..
 
 ENV TRANSFORMERS_CACHE=/data/leaderboard/hfcache
+
+WORKDIR /workspace/leaderboard
