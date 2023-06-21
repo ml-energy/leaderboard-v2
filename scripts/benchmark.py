@@ -24,7 +24,7 @@ SYSTEM_PROMPTS = {
     "chat-concise": (
         "A chat between a human user (prompter) and an artificial intelligence (AI) assistant. "
         "The assistant gives helpful, detailed, and polite answers to the user's questions. "
-        "The assistnat's answers are concise but high-quality."
+        "The assistant's answers are concise but high-quality."
     ),
     "instruct": (
         "Below is an instruction that describes a task. "
@@ -32,7 +32,7 @@ SYSTEM_PROMPTS = {
     ),
     "instruct-concise": (
         "Below is an instruction that describes a task. "
-        "Write a response that appropriately completes the request."
+        "Write a response that appropriately completes the request. "
         "The response should be concise but high-quality."
     ),
 }
