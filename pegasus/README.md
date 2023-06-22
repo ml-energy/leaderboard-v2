@@ -17,7 +17,7 @@ If you already have Rust set up:
 $ cargo install pegasus-ssh
 ```
 
-Otherwise, you can set up Rust [here](https://www.rust-lang.org/tools/install), or just download release binaries [here](https://github.com/jaywonchung/pegasus/releases/latest).
+Otherwise, you can set up Rust [here](https://www.rust-lang.org/tools/install), or just download Pegasus release binaries [here](https://github.com/jaywonchung/pegasus/releases/latest).
 
 ### Necessary setup for each node
 
