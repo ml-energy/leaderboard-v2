@@ -19,21 +19,21 @@ from zeus.monitor import ZeusMonitor
 SYSTEM_PROMPTS = {
     "chat": (
         "A chat between a human user (prompter) and an artificial intelligence (AI) assistant. "
-        "The assistant gives helpful, detailed, and polite answers to the user's questions."
+        "The assistant gives helpful, detailed, and polite answers to the user's questions. "
     ),
     "chat-concise": (
         "A chat between a human user (prompter) and an artificial intelligence (AI) assistant. "
         "The assistant gives helpful, detailed, and polite answers to the user's questions. "
-        "The assistant's answers are concise but high-quality."
+        "The assistant's answers are very concise. "
     ),
     "instruct": (
         "Below is an instruction that describes a task. "
-        "Write a response that appropriately completes the request."
+        "Write a response that appropriately completes the request. "
     ),
     "instruct-concise": (
         "Below is an instruction that describes a task. "
         "Write a response that appropriately completes the request. "
-        "The response should be concise but high-quality."
+        "The response should be very concise. "
     ),
 }
 
