@@ -20,7 +20,6 @@ class TableManager:
         # Load and merge CSV files.
         df = self._read_table(data_dir)
         models = json.load(open(f"{data_dir}/models.json"))
-
         # Add the #params column.
         df["parameters"] = df["model"].apply(lambda x: models[x]["params"])
 
@@ -37,6 +36,7 @@ class TableManager:
 
         # Sort by energy.
         df = df.sort_values(by="energy", ascending=True)
+        self.cur_filter_index = np.full(len(df), True)
 
         self.df = df
 
@@ -58,6 +58,8 @@ class TableManager:
                     df.insert(1, key, val)
                 res_df = pd.concat([res_df, df])
 
+        if res_df.empty:
+            raise ValueError("No benchmark CSV files were read. Something went wrong.")
         res_df = pd.merge(df_score, res_df, on=['model']).round(2)
         return res_df
 
@@ -81,14 +83,14 @@ class TableManager:
 
         # If the user did not provide a formula, return an error message.
         if not formula:
-            return self.get_df(), self._format_msg("Please enter a formula.")
+            return self.get_cur_df, self._format_msg("Please enter a formula.")
 
         # If there is an equal sign in the formula, `df.eval` will
         # return an entire DataFrame with the new column, instead of
         # just the new column. This is not what we want, so we check
         # for this case and return an error message.
         if "=" in formula:
-            return self.get_df(), self._format_msg("Invalid formula: expr cannot contain '='.")
+            return self.get_cur_df, self._format_msg("Invalid formula: expr cannot contain '='.")
 
         # The user may want to update an existing column.
         verb = "Updated" if column_name in self.df.columns else "Added"
@@ -100,7 +102,7 @@ class TableManager:
                 col = col.round(2)
             self.df[column_name] = col
         except Exception as exc:
-            return self.get_df(), self._format_msg(f"Invalid formula: {exc}")
+            return self.get_cur_df, self._format_msg(f"Invalid formula: {exc}")
         return self.get_df(), self._format_msg(f"{verb} column '{column_name}'.")
 
     def get_dropdown(self):
@@ -118,12 +120,16 @@ class TableManager:
 
     def get_df(self, *filters):
         """Create a filtered dataframe based on the user's choice."""
-
         self.cur_filter = filters or self.cur_filter
         index = np.full(len(self.df), True)
         for setup, choice in zip(self.schema, self.cur_filter):
             index = index & self.df[setup].isin(choice)
+        self.cur_filter_index = index
         return self.df.loc[index]
+
+    @property
+    def get_cur_df(self):
+        return self.df.loc[self.cur_filter_index]
 
     def plot_scatter(self, width, height, x, y, z):
         # The user did not select either x or y.
@@ -143,12 +149,12 @@ class TableManager:
             return None, width, height, self._format_msg("Width and height should be positive integers.")
 
         # Strip the <a> tag from model names.
-        text = self.get_df()["model"].apply(lambda x: x.split(">")[1].split("<")[0])
+        text = self.get_cur_df["model"].apply(lambda x: x.split(">")[1].split("<")[0])
         if z is None or z == "None" or z == "":
-            fig = px.scatter(self.get_df(), x=x, y=y, text=text)
+            fig = px.scatter(self.get_cur_df, x=x, y=y, text=text)
             fig.update_traces(textposition="top center")
         else:
-            fig = px.scatter_3d(self.get_df(), x=x, y=y, z=z, text=text)
+            fig = px.scatter_3d(self.get_cur_df, x=x, y=y, z=z, text=text)
             fig.update_traces(textposition="top center")
 
         fig.update_layout(width=width, height=height)
