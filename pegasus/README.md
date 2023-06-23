@@ -41,8 +41,11 @@ This builds our Docker image and spawns one container per GPU (named `leaderboar
 
 ```console
 $ cd pegasus
-$ pegasus b --queue-file setup-nodes.yaml
+$ cp setup-nodes.yaml queue.yaml
+$ pegasus b
 ```
+
+`b` stands for broadcast. Every command is run once on all (`hostname`, `gpu`) combinations.
 
 ## Benchmark
 
@@ -50,5 +53,8 @@ Now use Pegasus to run benchmarks for all the models across all nodes.
 
 ```console
 $ cd pegasus
-$ pegasus q --queue-file benchmark.yaml
+$ cp benchmark.yaml queue.yaml
+$ pegasus q
 ```
+
+`q` stands for queue. Each command is run once on the next available (`hostname`, `gpu`) combination.

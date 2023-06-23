@@ -1,3 +1,7 @@
+# This YAML dictionary will expand into 20 (models) x 4 (tasks) = 80 job commands,
+# where {{ model }} and {{ task }} are filled in with all possible combinations.
+# {{ gpu }} is defined in `hosts.yaml`, and will be filled in when Pegasus
+# determines the specific node and gpu the generated job command will run on.
 - command:
     - docker exec leaderboard{{ gpu }} python scripts/benchmark.py --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json --model-path {{ model }} --task {{ task }}
   model:

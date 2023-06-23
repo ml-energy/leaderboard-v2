@@ -1,2 +1,7 @@
+# The first item builds our docker image on each node once.
+# The second item spawns one docker container per GPU.
+# {{ gpu }} is defined in `hosts.yaml`, and will be filled in when Pegasus
+# determines the specific node and gpu the generated job command will run on.
+# We check {{ gpu }} = 0 to ensure that the image is only built once on each node.
 - if [ {{ gpu }} = 0 ]; then cd workspace/leaderboard && docker build -t ml-energy:latest .; fi
 - docker run -dit --name leaderboard{{ gpu }} --gpus '"device={{ gpu }}"' -v /data/leaderboard:/data/leaderboard -v $HOME/workspace/leaderboard:/workspace/leaderboard ml-energy:latest bash
