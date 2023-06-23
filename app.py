@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import os
 import json
-import glob
 import yaml
+import itertools
+import contextlib
 
 import gradio as gr
 import pandas as pd
 import plotly.io as pio
 import plotly.express as px
-
+import numpy as np
 pio.templates.default = "plotly_white"
 
 
@@ -44,23 +45,20 @@ class TableManager:
         df_score = pd.read_csv(f"{data_dir}/score.csv")
 
         with open(f"{data_dir}/schema.yaml", 'r') as file:
-            schema = yaml.safe_load(file)
-        # self.setup_list = list(schema.keys())
-        self.gpu_list = self.gpu_choice = schema['gpu']
-        self.task_list = self.task_choice = schema['task']
+            self.schema = yaml.safe_load(file)
+            self.cur_filter = list(self.schema.values())
 
         res_df = pd.DataFrame()
-        # TODO: I have hard code two setups for now; need to be changed
-        for gpu in self.gpu_list:
-            for task in self.task_list:
-                file_dir = f"{data_dir}/{gpu}_{task}_benchmark.csv"
-                if os.path.exists(file_dir):
-                    df = pd.read_csv(file_dir)
-                    df.insert(0, 'task', task)
-                    df.insert(0, 'gpu', gpu)
-                    df = pd.merge(df_score, df, on=['model']).round(2)
-                    res_df = pd.concat([res_df, df])
 
+        for choice in itertools.product(*self.schema.values()):
+            filepath = f"{data_dir}/{'_'.join(choice)}_benchmark.csv"
+            with contextlib.suppress(FileNotFoundError):
+                df = pd.read_csv(filepath)
+                for key, val in zip(self.schema.keys(), choice):
+                    df.insert(1, key, val)
+                res_df = pd.concat([res_df, df])
+
+        res_df = pd.merge(df_score, res_df, on=['model']).round(2)
         return res_df
 
     def get_df(self):
@@ -78,7 +76,6 @@ class TableManager:
 
     def add_column(self, column_name: str, formula: str):
         """Create and add a new column with the given formula."""
-
         # If the user did not provide the name of the new column,
         # generate a unique name for them.
         if not column_name:
@@ -123,13 +120,14 @@ class TableManager:
         dropdown_update = gr.Dropdown.update(choices=columns)
         return [dropdown_update] * 3
 
-    def create_filter_df(self, gpu_choice = None, task_choice = None ) -> pd.DataFrame:
+    def create_filter_df(self, *filters):
         """Create a filtered dataframe based on the user's choice."""
-        self.gpu_choice = gpu_choice if gpu_choice is not None else self.gpu_choice
-        self.task_choice = task_choice if task_choice is not None else self.task_choice
-        filtered_df = self.df.loc[(self.df['gpu'].isin(self.gpu_choice)) & (self.df['task'].isin(self.task_choice))]
 
-        return  filtered_df
+        self.cur_filter = filters if filters else self.cur_filter
+        index = np.full(len(self.df), True)
+        for setup, choice in zip(self.schema, self.cur_filter):
+            index = index & self.df[setup].isin(choice)
+        return self.df.loc[index]
 
     def plot_scatter(self, width, height, x, y, z):
         # The user did not select either x or y.
@@ -246,20 +244,23 @@ with block:
         # Tab 1: Leaderboard.
         with gr.TabItem("Leaderboard"):
             with gr.Row():
-                with gr.Box(scale=10):
+                with gr.Box():
                     gr.Markdown("## Select inference setup")
-                    gpu_choice = gr.CheckboxGroup(choices=global_tbm.gpu_list, label="GPU")
-                    task_choice = gr.CheckboxGroup(choices=global_tbm.task_list, label="Task")
-            with gr.Row():
-                fetch = gr.Button(value="Fetch")
+                    checkboxes = []
+                    for key, choices in global_tbm.schema.items():
+                        # Specifying `value` makes everything checked by default.
+                        checkboxes.append(gr.CheckboxGroup(choices=choices, value=choices, label=key))
 
             # Block 1: Leaderboard table.
             with gr.Row():
                 dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")
                 dataframe.change(None, None, None, _js=dataframe_update_js)
-                fetch.click(TableManager.create_filter_df, inputs=[tbm, gpu_choice, task_choice], outputs=dataframe)
+                # Table automatically updates when users check or uncheck any checkbox.
+                for checkbox in checkboxes:
+                    checkbox.change(TableManager.create_filter_df, inputs=[tbm, *checkboxes],
+                                    outputs=dataframe)
 
-            # Block 2: Allow users to custom new columns.
+            # Block 2: Allow users to add new columns.
             with gr.Row():
                 with gr.Column(scale=3):
                     with gr.Row():
