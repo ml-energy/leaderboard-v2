@@ -1,44 +1,32 @@
 from __future__ import annotations
 
 import os
+import json
+import glob
+import yaml
+
+import gradio as gr
+import pandas as pd
 import plotly.io as pio
+import plotly.express as px
+
 pio.templates.default = "plotly_white"
 
-import pandas as pd
-import gradio as gr
-import plotly.express as px
-import json
 
 class TableManager:
-    def __init__(self, data_dir: str, setup_list = ['A40_chat', 'A100_chat']) -> None:
+    def __init__(self, data_dir: str) -> None:
         """Load leaderboard data from CSV files in data_dir."""
         # Load and merge CSV files.
-        self.data_dir = data_dir
-        self.setup_list = setup_list
-
-        self.models = json.load(open(f"{data_dir}/models.json"))
-        df = {}
-        for setup in setup_list:
-            df[setup] = self._read_table(setup)
-
-        self.dfs = df
-        self.cur_df_name = next(iter(df.keys()))
-        self.default_colname = self.dfs[self.cur_df_name].columns.tolist()[1:]
-
-
-    def _read_table(self, setup_name: str) -> pd.DataFrame:
-        """Read tables."""
-        df1 = pd.read_csv(f"{self.data_dir}/score.csv")
-        df2 = pd.read_csv(f"{self.data_dir}/{setup_name}_benchmark.csv")
-        df = pd.merge(df1, df2, on="model").round(2)
+        df = self._read_table(data_dir)
+        models = json.load(open(f"{data_dir}/models.json"))
 
         # Add the #params column.
-        df["parameters"] = df["model"].apply(lambda x: self.models[x]["params"])
+        df["parameters"] = df["model"].apply(lambda x: models[x]["params"])
 
         # Make the first column (model) a HTML anchor to the model's website.
         def format_model_link(model_name: str) -> str:
-            url = self.models[model_name]["url"]
-            nickname = self.models[model_name]["nickname"]
+            url = models[model_name]["url"]
+            nickname = models[model_name]["nickname"]
             return (
                 f'<a style="text-decoration: underline; text-decoration-style: dotted" '
                 f'target="_blank" href="{url}">{nickname}</a>'
@@ -49,20 +37,39 @@ class TableManager:
         # Sort by energy.
         df = df.sort_values(by="energy", ascending=True)
 
-        return df
+        self.df = df
 
-    def switch_table(self, setup_name: str) -> None:
-        """Switch to a different table."""
-        self.cur_df_name = setup_name
-        return self.dfs[setup_name]
+    def _read_table(self, data_dir: str) -> pd.DataFrame:
+        """Read tables."""
+        df_score = pd.read_csv(f"{data_dir}/score.csv")
+
+        with open(f"{data_dir}/schema.yaml", 'r') as file:
+            schema = yaml.safe_load(file)
+        # self.setup_list = list(schema.keys())
+        self.gpu_list = self.gpu_choice = schema['gpu']
+        self.task_list = self.task_choice = schema['task']
+
+        res_df = pd.DataFrame()
+        # TODO: I have hard code two setups for now; need to be changed
+        for gpu in self.gpu_list:
+            for task in self.task_list:
+                file_dir = f"{data_dir}/{gpu}_{task}_benchmark.csv"
+                if os.path.exists(file_dir):
+                    df = pd.read_csv(file_dir)
+                    df.insert(0, 'task', task)
+                    df.insert(0, 'gpu', gpu)
+                    df = pd.merge(df_score, df, on=['model']).round(2)
+                    res_df = pd.concat([res_df, df])
+
+        return res_df
 
     def get_df(self):
         """Return the leaderboard Pandas DataFrame."""
-        return self.dfs[self.cur_df_name]
+        return self.df
 
     def get_datatypes(self):
         """Return the datatypes of the leaderboard Pandas DataFrame."""
-        return ["markdown"] + ["number"] * (len(self.dfs[self.cur_df_name].columns) - 1)
+        return ["markdown"] + ["number"] * (len(self.df.columns) - 1)
         # return "markdown"
 
     def _format_msg(self, text: str) -> str:
@@ -71,51 +78,40 @@ class TableManager:
 
     def add_column(self, column_name: str, formula: str):
         """Create and add a new column with the given formula."""
+
         # If the user did not provide the name of the new column,
         # generate a unique name for them.
         if not column_name:
             counter = 1
-            while (column_name := f"custom{counter}") in self.dfs[self.cur_df_name].columns:
+            while (column_name := f"custom{counter}") in self.df.columns:
                 counter += 1
 
         # If the user did not provide a formula, return an error message.
         if not formula:
-            return self.dfs[self.cur_df_name], self._format_msg("Please enter a formula.")
+            return self.create_filter_df(), self._format_msg("Please enter a formula.")
 
         # If there is an equal sign in the formula, `df.eval` will
         # return an entire DataFrame with the new column, instead of
         # just the new column. This is not what we want, so we check
         # for this case and return an error message.
         if "=" in formula:
-            return self.dfs[self.cur_df_name], self._format_msg("Invalid formula: expr cannot contain '='.")
+            return self.create_filter_df(), self._format_msg("Invalid formula: expr cannot contain '='.")
 
         # The user may want to update an existing column.
-        verb = "Updated" if column_name in self.dfs[self.cur_df_name].columns else "Added"
+        verb = "Updated" if column_name in self.df.columns else "Added"
 
         # Evaluate the formula and catch any error.
         try:
-            col = self.dfs[self.cur_df_name].eval(formula)
+            col = self.df.eval(formula)
             if isinstance(col, pd.Series):
                 col = col.round(2)
-            self.dfs[self.cur_df_name][column_name] = col
+            self.df[column_name] = col
         except Exception as exc:
-            return self.dfs[self.cur_df_name], self._format_msg(f"Invalid formula: {exc}")
-
-        return [self.dfs[self.cur_df_name],
-                self._format_msg(f"{verb} column '{column_name}' in Table {self.cur_df_name}.")] + \
-                self.update_dropdown()
-
-    def add_ext_column(self, table_name: str, column_name: str):
-        """Add a new column from external table."""
-
-        new_col = f"{table_name}_{column_name}"
-        if table_name in self.dfs.keys() and column_name in self.dfs[table_name].columns:
-            self.dfs[self.cur_df_name][new_col] = self.dfs[table_name][column_name]
-        return [self.dfs[self.cur_df_name]] + self.update_dropdown()
+            return self.create_filter_df(), self._format_msg(f"Invalid formula: {exc}")
+        return self.create_filter_df(), self._format_msg(f"{verb} column '{column_name}'.")
 
     def get_dropdown(self):
-        """Return the dropdown menu."""
-        columns = self.dfs[self.cur_df_name].columns.tolist()[1:]
+        columns = self.df.columns.tolist()[1:] # include gpu and task in the dropdown
         return [
             gr.Dropdown(choices=columns, label="X"),
             gr.Dropdown(choices=columns, label="Y"),
@@ -123,17 +119,17 @@ class TableManager:
         ]
 
     def update_dropdown(self):
-        """Update the dropdown menu."""
-        columns = self.dfs[self.cur_df_name].columns.tolist()[1:]
+        columns = self.df.columns.tolist()[1:]
         dropdown_update = gr.Dropdown.update(choices=columns)
         return [dropdown_update] * 3
 
-    def get_table_schema(self):
-        """Return the schema of table names and column names."""
-        return [
-            gr.Dropdown(choices=self.dfs.keys(), label="Table Name"),
-            gr.Dropdown(choices=self.default_colname, label="Column Name"),
-        ]
+    def create_filter_df(self, gpu_choice = None, task_choice = None ) -> pd.DataFrame:
+        """Create a filtered dataframe based on the user's choice."""
+        self.gpu_choice = gpu_choice if gpu_choice is not None else self.gpu_choice
+        self.task_choice = task_choice if task_choice is not None else self.task_choice
+        filtered_df = self.df.loc[(self.df['gpu'].isin(self.gpu_choice)) & (self.df['task'].isin(self.task_choice))]
+
+        return  filtered_df
 
     def plot_scatter(self, width, height, x, y, z):
         # The user did not select either x or y.
@@ -153,19 +149,17 @@ class TableManager:
             return None, width, height, self._format_msg("Width and height should be positive integers.")
 
         # Strip the <a> tag from model names.
-        text = self.dfs[self.cur_df_name]["model"].apply(lambda a: a.split(">")[1].split("<")[0])
+        text = self.create_filter_df()["model"].apply(lambda x: x.split(">")[1].split("<")[0])
         if z is None or z == "None" or z == "":
-            fig = px.scatter(self.dfs[self.cur_df_name], x=x, y=y, text=text)
+            fig = px.scatter(self.create_filter_df(), x=x, y=y, text=text)
             fig.update_traces(textposition="top center")
         else:
-            fig = px.scatter_3d(self.dfs[self.cur_df_name], x=x, y=y, z=z, text=text)
+            fig = px.scatter_3d(self.create_filter_df(), x=x, y=y, z=z, text=text)
             fig.update_traces(textposition="top center")
 
         fig.update_layout(width=width, height=height)
 
         return fig, width, height, ""
-
-
 
 
 # Find the latest version of the CSV files in data/
@@ -251,17 +245,21 @@ with block:
     with gr.Tabs():
         # Tab 1: Leaderboard.
         with gr.TabItem("Leaderboard"):
-            # Block 0: Choose a table to display
             with gr.Row():
-                setup_radio = gr.inputs.Radio(global_tbm.setup_list, default = 'A40_chat', label="Choose GPU Type - Prompt Setup")
+                with gr.Box(scale=10):
+                    gr.Markdown("## Select inference setup")
+                    gpu_choice = gr.CheckboxGroup(choices=global_tbm.gpu_list, label="GPU")
+                    task_choice = gr.CheckboxGroup(choices=global_tbm.task_list, label="Task")
+            with gr.Row():
+                fetch = gr.Button(value="Fetch")
 
             # Block 1: Leaderboard table.
             with gr.Row():
                 dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")
                 dataframe.change(None, None, None, _js=dataframe_update_js)
-            setup_radio.change(fn = global_tbm.switch_table, inputs = setup_radio, outputs = dataframe)
+                fetch.click(TableManager.create_filter_df, inputs=[tbm, gpu_choice, task_choice], outputs=dataframe)
 
-            # Block 2: Allow users to new columns.
+            # Block 2: Allow users to custom new columns.
             with gr.Row():
                 with gr.Column(scale=3):
                     with gr.Row():
@@ -269,28 +267,21 @@ with block:
                         formula_input = gr.Textbox("energy/latency", lines=1, label="Formula")
                 with gr.Column(scale=1):
                     with gr.Row():
-                        add_col_btn = gr.Button("Add custom column to table (⏎)", elem_classes=["btn-submit"])
+                        add_col_btn = gr.Button("Add to table (⏎)", elem_classes=["btn-submit"])
                     with gr.Row():
                         clear_input_btn = gr.Button("Clear")
             with gr.Row():
                 add_col_message = gr.HTML("")
-            # colname_input.submit(global_tbm.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])
-            # formula_input.submit(global_tbm.add_column, inputs=[tbm, colname_input, formula_input], outputs=[dataframe, add_col_message])
-            clear_input_btn.click(lambda: (None, None, None), None, outputs=[colname_input, formula_input, add_col_message])
+            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input],
+                                 outputs=[dataframe, add_col_message])
+            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input],
+                                 outputs=[dataframe, add_col_message])
+            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input],
+                              outputs=[dataframe, add_col_message])
+            clear_input_btn.click(lambda: (None, None, None), None,
+                                  outputs=[colname_input, formula_input, add_col_message])
 
-            # Block 3: Allow users to add columns from the dropdown.
-
-            with gr.Row():
-                with gr.Column(scale=3):
-                    with gr.Row():
-                        add_col_from_other_table = global_tbm.get_table_schema()
-                with gr.Column(scale=1):
-                    with gr.Row():
-                        add_col_from_other_table_btn = gr.Button("Add external column (⏎)", elem_classes=["btn-submit"])
-
-            # add_col_from_other_table_btn.click(global_tbm.add_ext_column, inputs=add_col_from_other_table, outputs=dataframe)
-
-            # Block 4: Allow users to plot 2D and 3D scatter plots.
+            # Block 3: Allow users to plot 2D and 3D scatter plots.
             with gr.Row():
                 with gr.Column(scale=3):
                     with gr.Row():
@@ -309,25 +300,20 @@ with block:
                 plot = gr.Plot()
             with gr.Row():
                 plot_message = gr.HTML("")
-
-            add_col_btn.click(global_tbm.add_column, inputs=[colname_input, formula_input],
-                              outputs=[dataframe, add_col_message] + axis_dropdowns)
-            add_col_from_other_table_btn.click(global_tbm.add_ext_column, inputs=add_col_from_other_table,
-                                               outputs=[dataframe] + axis_dropdowns)
-
+            add_col_btn.click(TableManager.update_dropdown, inputs=tbm, outputs=axis_dropdowns)  # type: ignore
             plot_width_input.submit(
-                global_tbm.plot_scatter,
-                inputs=[ plot_width_input, plot_height_input, *axis_dropdowns],
+                TableManager.plot_scatter,
+                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
                 outputs=[plot, plot_width_input, plot_height_input, plot_message],
             )
             plot_height_input.submit(
-                global_tbm.plot_scatter,
-                inputs=[  plot_width_input, plot_height_input, *axis_dropdowns],
+                TableManager.plot_scatter,
+                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
                 outputs=[plot, plot_width_input, plot_height_input, plot_message],
             )
             plot_btn.click(
-                global_tbm.plot_scatter,
-                inputs=[  plot_width_input, plot_height_input, *axis_dropdowns],
+                TableManager.plot_scatter,
+                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
                 outputs=[plot, plot_width_input, plot_height_input, plot_message],
             )
             clear_plot_btn.click(
@@ -355,4 +341,3 @@ with block:
     block.load(TableManager.get_df, inputs=tbm, outputs=dataframe)
 
 block.launch()
-
