@@ -8,7 +8,7 @@ Therefore, we want an automated piece of software that drains a queue of benchma
 
 ### Install Pegasus
 
-Obviously, Pegasus needs to keep SSH connections with all the nodes in order to queue up and run jobs over SSH.
+Pegasus needs to keep SSH connections with all the nodes in order to queue up and run jobs over SSH.
 So you should install and run Pegasus on a computer that you can keep awake.
 
 If you already have Rust set up:
