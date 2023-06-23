@@ -61,10 +61,6 @@ class TableManager:
         res_df = pd.merge(df_score, res_df, on=['model']).round(2)
         return res_df
 
-    def get_df(self):
-        """Return the leaderboard Pandas DataFrame."""
-        return self.df
-
     def get_datatypes(self):
         """Return the datatypes of the leaderboard Pandas DataFrame."""
         return ["markdown"] + ["number"] * (len(self.df.columns) - 1)
@@ -85,14 +81,14 @@ class TableManager:
 
         # If the user did not provide a formula, return an error message.
         if not formula:
-            return self.create_filter_df(), self._format_msg("Please enter a formula.")
+            return self.get_df(), self._format_msg("Please enter a formula.")
 
         # If there is an equal sign in the formula, `df.eval` will
         # return an entire DataFrame with the new column, instead of
         # just the new column. This is not what we want, so we check
         # for this case and return an error message.
         if "=" in formula:
-            return self.create_filter_df(), self._format_msg("Invalid formula: expr cannot contain '='.")
+            return self.get_df(), self._format_msg("Invalid formula: expr cannot contain '='.")
 
         # The user may want to update an existing column.
         verb = "Updated" if column_name in self.df.columns else "Added"
@@ -104,8 +100,8 @@ class TableManager:
                 col = col.round(2)
             self.df[column_name] = col
         except Exception as exc:
-            return self.create_filter_df(), self._format_msg(f"Invalid formula: {exc}")
-        return self.create_filter_df(), self._format_msg(f"{verb} column '{column_name}'.")
+            return self.get_df(), self._format_msg(f"Invalid formula: {exc}")
+        return self.get_df(), self._format_msg(f"{verb} column '{column_name}'.")
 
     def get_dropdown(self):
         columns = self.df.columns.tolist()[1:] # include gpu and task in the dropdown
@@ -120,7 +116,7 @@ class TableManager:
         dropdown_update = gr.Dropdown.update(choices=columns)
         return [dropdown_update] * 3
 
-    def create_filter_df(self, *filters):
+    def get_df(self, *filters):
         """Create a filtered dataframe based on the user's choice."""
 
         self.cur_filter = filters if filters else self.cur_filter
@@ -147,12 +143,12 @@ class TableManager:
             return None, width, height, self._format_msg("Width and height should be positive integers.")
 
         # Strip the <a> tag from model names.
-        text = self.create_filter_df()["model"].apply(lambda x: x.split(">")[1].split("<")[0])
+        text = self.get_df()["model"].apply(lambda x: x.split(">")[1].split("<")[0])
         if z is None or z == "None" or z == "":
-            fig = px.scatter(self.create_filter_df(), x=x, y=y, text=text)
+            fig = px.scatter(self.get_df(), x=x, y=y, text=text)
             fig.update_traces(textposition="top center")
         else:
-            fig = px.scatter_3d(self.create_filter_df(), x=x, y=y, z=z, text=text)
+            fig = px.scatter_3d(self.get_df(), x=x, y=y, z=z, text=text)
             fig.update_traces(textposition="top center")
 
         fig.update_layout(width=width, height=height)
@@ -257,7 +253,7 @@ with block:
                 dataframe.change(None, None, None, _js=dataframe_update_js)
                 # Table automatically updates when users check or uncheck any checkbox.
                 for checkbox in checkboxes:
-                    checkbox.change(TableManager.create_filter_df, inputs=[tbm, *checkboxes],
+                    checkbox.change(TableManager.get_df, inputs=[tbm, *checkboxes],
                                     outputs=dataframe)
 
             # Block 2: Allow users to add new columns.
