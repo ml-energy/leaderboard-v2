@@ -1,3 +1,2 @@
 gpu: ["A40"]
 task: ["chat", "chat-concise", "instruct", "instruct-concise"]
-
