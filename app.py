@@ -119,7 +119,7 @@ class TableManager:
     def get_df(self, *filters):
         """Create a filtered dataframe based on the user's choice."""
 
-        self.cur_filter = filters if filters else self.cur_filter
+        self.cur_filter = filters or self.cur_filter
         index = np.full(len(self.df), True)
         for setup, choice in zip(self.schema, self.cur_filter):
             index = index & self.df[setup].isin(choice)
