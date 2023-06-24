@@ -6,11 +6,11 @@ import yaml
 import itertools
 import contextlib
 
+import numpy as np
 import gradio as gr
 import pandas as pd
 import plotly.io as pio
 import plotly.express as px
-import numpy as np
 pio.templates.default = "plotly_white"
 
 
@@ -18,12 +18,13 @@ class TableManager:
     def __init__(self, data_dir: str) -> None:
         """Load leaderboard data from CSV files in data_dir."""
         # Load and merge CSV files.
-        df = self._read_table(data_dir)
+        df = self._read_tables(data_dir)
         models = json.load(open(f"{data_dir}/models.json"))
+
         # Add the #params column.
         df["parameters"] = df["model"].apply(lambda x: models[x]["params"])
 
-        # Make the first column (model) a HTML anchor to the model's website.
+        # Make the first column (model) an HTML anchor to the model's website.
         def format_model_link(model_name: str) -> str:
             url = models[model_name]["url"]
             nickname = models[model_name]["nickname"]
@@ -31,25 +32,29 @@ class TableManager:
                 f'<a style="text-decoration: underline; text-decoration-style: dotted" '
                 f'target="_blank" href="{url}">{nickname}</a>'
             )
-
         df["model"] = df["model"].apply(format_model_link)
 
         # Sort by energy.
         df = df.sort_values(by="energy", ascending=True)
-        self.cur_filter_index = np.full(len(df), True)
 
-        self.df = df
+        # The full table where all the data are.
+        self.full_df = df
+        # The currently visible table after filtering.
+        self.cur_df = df
+        # The current index of the visible table after filtering.
+        self.cur_index = df.index.to_numpy()
 
-    def _read_table(self, data_dir: str) -> pd.DataFrame:
+    def _read_tables(self, data_dir: str) -> pd.DataFrame:
         """Read tables."""
         df_score = pd.read_csv(f"{data_dir}/score.csv")
 
-        with open(f"{data_dir}/schema.yaml", 'r') as file:
-            self.schema = yaml.safe_load(file)
-            self.cur_filter = list(self.schema.values())
+        with open(f"{data_dir}/schema.yaml") as file:
+            self.schema: dict[str, list] = yaml.safe_load(file)
 
         res_df = pd.DataFrame()
 
+        # Do a cartesian product of all the choices in the schema
+        # and try to read the corresponding CSV files.
         for choice in itertools.product(*self.schema.values()):
             filepath = f"{data_dir}/{'_'.join(choice)}_benchmark.csv"
             with contextlib.suppress(FileNotFoundError):
@@ -59,14 +64,9 @@ class TableManager:
                 res_df = pd.concat([res_df, df])
 
         if res_df.empty:
-            raise ValueError("No benchmark CSV files were read. Something went wrong.")
-        res_df = pd.merge(df_score, res_df, on=['model']).round(2)
-        return res_df
+            raise ValueError(f"No benchmark CSV files were read from {data_dir=}.")
 
-    def get_datatypes(self):
-        """Return the datatypes of the leaderboard Pandas DataFrame."""
-        return ["markdown"] + ["number"] * (len(self.df.columns) - 1)
-        # return "markdown"
+        return pd.merge(res_df, df_score, on=["model"]).round(2)
 
     def _format_msg(self, text: str) -> str:
         """Formats into HTML that prints in Monospace font."""
@@ -78,35 +78,38 @@ class TableManager:
         # generate a unique name for them.
         if not column_name:
             counter = 1
-            while (column_name := f"custom{counter}") in self.df.columns:
+            while (column_name := f"custom{counter}") in self.full_df.columns:
                 counter += 1
 
         # If the user did not provide a formula, return an error message.
         if not formula:
-            return self.get_cur_df, self._format_msg("Please enter a formula.")
+            return self.cur_df, self._format_msg("Please enter a formula.")
 
         # If there is an equal sign in the formula, `df.eval` will
         # return an entire DataFrame with the new column, instead of
         # just the new column. This is not what we want, so we check
         # for this case and return an error message.
         if "=" in formula:
-            return self.get_cur_df, self._format_msg("Invalid formula: expr cannot contain '='.")
+            return self.cur_df, self._format_msg("Invalid formula: expr cannot contain '='.")
 
         # The user may want to update an existing column.
-        verb = "Updated" if column_name in self.df.columns else "Added"
+        verb = "Updated" if column_name in self.full_df.columns else "Added"
 
         # Evaluate the formula and catch any error.
         try:
-            col = self.df.eval(formula)
+            col = self.full_df.eval(formula)
             if isinstance(col, pd.Series):
                 col = col.round(2)
-            self.df[column_name] = col
+            self.full_df[column_name] = col
         except Exception as exc:
-            return self.get_cur_df, self._format_msg(f"Invalid formula: {exc}")
-        return self.get_df(), self._format_msg(f"{verb} column '{column_name}'.")
+            return self.cur_df, self._format_msg(f"Invalid formula: {exc}")
+
+        # If adding a column succeeded, `self.cur_df` should also be updated.
+        self.cur_df = self.full_df.loc[self.cur_index]
+        return self.cur_df, self._format_msg(f"{verb} column '{column_name}'.")
 
     def get_dropdown(self):
-        columns = self.df.columns.tolist()[1:] # include gpu and task in the dropdown
+        columns = self.full_df.columns.tolist()[1:] # include gpu and task in the dropdown
         return [
             gr.Dropdown(choices=columns, label="X"),
             gr.Dropdown(choices=columns, label="Y"),
@@ -114,22 +117,18 @@ class TableManager:
         ]
 
     def update_dropdown(self):
-        columns = self.df.columns.tolist()[1:]
+        columns = self.full_df.columns.tolist()[1:]
         dropdown_update = gr.Dropdown.update(choices=columns)
         return [dropdown_update] * 3
 
-    def get_df(self, *filters):
-        """Create a filtered dataframe based on the user's choice."""
-        self.cur_filter = filters or self.cur_filter
-        index = np.full(len(self.df), True)
-        for setup, choice in zip(self.schema, self.cur_filter):
-            index = index & self.df[setup].isin(choice)
-        self.cur_filter_index = index
-        return self.df.loc[index]
-
-    @property
-    def get_cur_df(self):
-        return self.df.loc[self.cur_filter_index]
+    def set_filter_get_df(self, *filters):
+        """Set the current set of filters and return the filtered DataFrame."""
+        index = np.full(len(self.full_df), True)
+        for setup, choice in zip(self.schema, filters):
+            index = index & self.full_df[setup].isin(choice)
+        self.cur_df = self.full_df.loc[index]
+        self.cur_index = index
+        return self.cur_df
 
     def plot_scatter(self, width, height, x, y, z):
         # The user did not select either x or y.
@@ -149,14 +148,12 @@ class TableManager:
             return None, width, height, self._format_msg("Width and height should be positive integers.")
 
         # Strip the <a> tag from model names.
-        text = self.get_cur_df["model"].apply(lambda x: x.split(">")[1].split("<")[0])
+        text = self.cur_df["model"].apply(lambda x: x.split(">")[1].split("<")[0])
         if z is None or z == "None" or z == "":
-            fig = px.scatter(self.get_cur_df, x=x, y=y, text=text)
-            fig.update_traces(textposition="top center")
+            fig = px.scatter(self.cur_df, x=x, y=y, text=text)
         else:
-            fig = px.scatter_3d(self.get_cur_df, x=x, y=y, z=z, text=text)
-            fig.update_traces(textposition="top center")
-
+            fig = px.scatter_3d(self.cur_df, x=x, y=y, z=z, text=text)
+        fig.update_traces(textposition="top center")
         fig.update_layout(width=width, height=height)
 
         return fig, width, height, ""
@@ -165,6 +162,12 @@ class TableManager:
 # Find the latest version of the CSV files in data/
 # and initialize the global TableManager.
 latest_date = sorted(os.listdir("data/"))[-1]
+
+# The global instance of the TableManager should only be used when
+# initializing components in the Gradio interface. If the global instance
+# is mutated while handling user sessions, the change will be reflected
+# in every user session. Instead, the instance provided by gr.State should
+# be used.
 global_tbm = TableManager(f"data/{latest_date}")
 
 # Custom JS.
@@ -179,11 +182,16 @@ global_tbm = TableManager(f"data/{latest_date}")
 dataframe_update_js = f"""
 function format_model_link() {{
     // Iterate over the cells of the first column of the leaderboard table.
-    for (let index = 1; index <= {len(global_tbm.get_df())}; index++) {{
+    for (let index = 1; index <= {len(global_tbm.full_df)}; index++) {{
         // Get the cell.
         var cell = document.querySelector(
             `#tab-leaderboard > div > div > div > table > tbody > tr:nth-child(${{index}}) > td:nth-child(1) > div > span`
         );
+
+        // If nothing was found, it likely means that now the visible table has less rows
+        // than the full table. This happens when the user filters the table. In this case,
+        // we should just return.
+        if (cell == null) break;
 
         // This check exists to make this function idempotent.
         // Multiple changes to the Dataframe component may invoke this function,
@@ -247,7 +255,7 @@ with block:
         with gr.TabItem("Leaderboard"):
             with gr.Row():
                 with gr.Box():
-                    gr.Markdown("## Select inference setup")
+                    gr.Markdown("## Select benchmark parameters")
                     checkboxes = []
                     for key, choices in global_tbm.schema.items():
                         # Specifying `value` makes everything checked by default.
@@ -256,11 +264,11 @@ with block:
             # Block 1: Leaderboard table.
             with gr.Row():
                 dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")
-                dataframe.change(None, None, None, _js=dataframe_update_js)
-                # Table automatically updates when users check or uncheck any checkbox.
-                for checkbox in checkboxes:
-                    checkbox.change(TableManager.get_df, inputs=[tbm, *checkboxes],
-                                    outputs=dataframe)
+            # Make sure the models have clickable links.
+            dataframe.change(None, None, None, _js=dataframe_update_js)
+            # Table automatically updates when users check or uncheck any checkbox.
+            for checkbox in checkboxes:
+                checkbox.change(TableManager.set_filter_get_df, inputs=[tbm, *checkboxes], outputs=dataframe)
 
             # Block 2: Allow users to add new columns.
             with gr.Row():
@@ -275,14 +283,26 @@ with block:
                         clear_input_btn = gr.Button("Clear")
             with gr.Row():
                 add_col_message = gr.HTML("")
-            colname_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input],
-                                 outputs=[dataframe, add_col_message])
-            formula_input.submit(TableManager.add_column, inputs=[tbm, colname_input, formula_input],
-                                 outputs=[dataframe, add_col_message])
-            add_col_btn.click(TableManager.add_column, inputs=[tbm, colname_input, formula_input],
-                              outputs=[dataframe, add_col_message])
-            clear_input_btn.click(lambda: (None, None, None), None,
-                                  outputs=[colname_input, formula_input, add_col_message])
+            colname_input.submit(
+                TableManager.add_column,
+                inputs=[tbm, colname_input, formula_input],
+                outputs=[dataframe, add_col_message],
+            )
+            formula_input.submit(
+                TableManager.add_column,
+                inputs=[tbm, colname_input, formula_input],
+                outputs=[dataframe, add_col_message],
+            )
+            add_col_btn.click(
+                TableManager.add_column,
+                inputs=[tbm, colname_input, formula_input],
+                outputs=[dataframe, add_col_message],
+            )
+            clear_input_btn.click(
+                lambda: (None, None, None),
+                inputs=None,
+                outputs=[colname_input, formula_input, add_col_message],
+            )
 
             # Block 3: Allow users to plot 2D and 3D scatter plots.
             with gr.Row():
@@ -341,6 +361,6 @@ with block:
             gr.Markdown("\n".join(lines[i:]))
 
     # Load the table on page load.
-    block.load(TableManager.get_df, inputs=tbm, outputs=dataframe)
+    block.load(lambda tbm: tbm.full_df, inputs=tbm, outputs=dataframe)
 
 block.launch()
