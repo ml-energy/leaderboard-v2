@@ -69,7 +69,7 @@ $ cp nlp-eval.yaml queue.yaml
 $ pegasus q
 ```
 
-if the cuda memory of a single gpu is not enough, you can use more GPUs like follows —
+for some tasks, if the cuda memory of a single gpu is not enough, you can use more GPUs like follows —
 
 1. create a larger docker with more gpus, e.g. 2 gpus:
 
@@ -80,5 +80,7 @@ $ docker run -dit --name leaderboard_nlp_tasks --gpus '"device=0,1"' -v /data/le
 2. then run the specific task with Pegasus or directly run with
 
 ```console
-$ docker exec leaderboard_nlp_tasks python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{model}},trust_remote_code=True,use_accelerate=True --tasks arc_challenge --num_fewshot 25
+$ docker exec leaderboard_nlp_tasks python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{model}},trust_remote_code=True,use_accelerate=True --tasks {{task}} --num_fewshot {{shot}}
 ```
+
+change 'model', `task` and `shot` to specific tasks
