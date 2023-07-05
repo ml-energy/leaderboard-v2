@@ -1,0 +1,68 @@
+- command:
+    - docker exec leaderboard{{ gpu }} python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{model}},trust_remote_code=True,use_accelerate=True --tasks arc_challenge --num_fewshot 25
+  model:
+    - /data/leaderboard/weights/metaai/llama-7B
+    - /data/leaderboard/weights/metaai/llama-13B
+    - /data/leaderboard/weights/lmsys/vicuna-7B
+    - /data/leaderboard/weights/lmsys/vicuna-13B
+    - /data/leaderboard/weights/tatsu-lab/alpaca-7B
+    - /data/leaderboard/weights/BAIR/koala-7b
+    - /data/leaderboard/weights/BAIR/koala-13b
+    - camel-ai/CAMEL-13B-Combined-Data
+    - databricks/dolly-v2-12b
+    - FreedomIntelligence/phoenix-inst-chat-7b
+    - h2oai/h2ogpt-gm-oasst1-en-2048-open-llama-7b-preview-300bt-v2
+    - lmsys/fastchat-t5-3b-v1.0
+    - Neutralzz/BiLLa-7B-SFT
+    - nomic-ai/gpt4all-13b-snoozy
+    - openaccess-ai-collective/manticore-13b-chat-pyg
+    - OpenAssistant/oasst-sft-1-pythia-12b
+    - project-baize/baize-v2-7B
+    - StabilityAI/stablelm-tuned-alpha-7b
+    - togethercomputer/RedPajama-INCITE-7B-Chat
+
+- command:
+    - docker exec leaderboard{{ gpu }} python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{model}},trust_remote_code=True,use_accelerate=True --tasks hellaswag --num_fewshot 10
+  model:
+    - /data/leaderboard/weights/metaai/llama-7B
+    - /data/leaderboard/weights/metaai/llama-13B
+    - /data/leaderboard/weights/lmsys/vicuna-7B
+    - /data/leaderboard/weights/lmsys/vicuna-13B
+    - /data/leaderboard/weights/tatsu-lab/alpaca-7B
+    - /data/leaderboard/weights/BAIR/koala-7b
+    - /data/leaderboard/weights/BAIR/koala-13b
+    - camel-ai/CAMEL-13B-Combined-Data
+    - databricks/dolly-v2-12b
+    - FreedomIntelligence/phoenix-inst-chat-7b
+    - h2oai/h2ogpt-gm-oasst1-en-2048-open-llama-7b-preview-300bt-v2
+    - lmsys/fastchat-t5-3b-v1.0
+    - Neutralzz/BiLLa-7B-SFT
+    - nomic-ai/gpt4all-13b-snoozy
+    - openaccess-ai-collective/manticore-13b-chat-pyg
+    - OpenAssistant/oasst-sft-1-pythia-12b
+    - project-baize/baize-v2-7B
+    - StabilityAI/stablelm-tuned-alpha-7b
+    - togethercomputer/RedPajama-INCITE-7B-Chat
+
+- command:
+    - docker exec leaderboard{{ gpu }} python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{model}},trust_remote_code=True,use_accelerate=True --tasks truthfulqa_mc --num_fewshot 0
+  model:
+    - /data/leaderboard/weights/metaai/llama-7B
+    - /data/leaderboard/weights/metaai/llama-13B
+    - /data/leaderboard/weights/lmsys/vicuna-7B
+    - /data/leaderboard/weights/lmsys/vicuna-13B
+    - /data/leaderboard/weights/tatsu-lab/alpaca-7B
+    - /data/leaderboard/weights/BAIR/koala-7b
+    - /data/leaderboard/weights/BAIR/koala-13b
+    - camel-ai/CAMEL-13B-Combined-Data
+    - databricks/dolly-v2-12b
+    - FreedomIntelligence/phoenix-inst-chat-7b
+    - h2oai/h2ogpt-gm-oasst1-en-2048-open-llama-7b-preview-300bt-v2
+    - lmsys/fastchat-t5-3b-v1.0
+    - Neutralzz/BiLLa-7B-SFT
+    - nomic-ai/gpt4all-13b-snoozy
+    - openaccess-ai-collective/manticore-13b-chat-pyg
+    - OpenAssistant/oasst-sft-1-pythia-12b
+    - project-baize/baize-v2-7B
+    - StabilityAI/stablelm-tuned-alpha-7b
+    - togethercomputer/RedPajama-INCITE-7B-Chat
