@@ -58,3 +58,27 @@ $ pegasus q
 ```
 
 `q` stands for queue. Each command is run once on the next available (`hostname`, `gpu`) combination.
+
+## NLP-eval
+
+Now use Pegasus to run benchmarks for all the models across all nodes.
+
+```console
+$ cd pegasus
+$ cp nlp-eval.yaml queue.yaml
+$ pegasus q
+```
+
+if the cuda memory of a single gpu is not enough, you can use more GPUs like follows —
+
+1. create a larger docker with more gpus, e.g. 2 gpus:
+
+```console
+$ docker run -dit --name leaderboard_nlp_tasks --gpus '"device=0,1"' -v /data/leaderboard:/data/leaderboard -v $HOME/workspace/leaderboard:/workspace/leaderboard ml-energy:latest bash
+```
+
+2. then run the specific task with Pegasus or directly run with
+
+```console
+$ docker exec leaderboard_nlp_tasks python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{model}},trust_remote_code=True,use_accelerate=True --tasks arc_challenge --num_fewshot 25
+```
