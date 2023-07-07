@@ -335,6 +335,7 @@ with block:
                 checkbox.change(TableManager.set_filter_get_df, inputs=[tbm, *checkboxes], outputs=dataframe)
 
             # Block 3: Allow users to add new columns.
+            gr.Markdown("---\n### Add custom columns to the table")
             with gr.Row():
                 with gr.Column(scale=3):
                     with gr.Row():
@@ -377,6 +378,7 @@ with block:
             )
 
             # Block 4: Allow users to plot 2D and 3D scatter plots.
+            gr.Markdown("---\n### Scatter plot (Hover over marker to show model name)")
             with gr.Row():
                 with gr.Column(scale=3):
                     with gr.Row():
