@@ -205,11 +205,12 @@ class TableManager:
 
         # Strip the <a> tag from model names.
         text = self.cur_df["model"].apply(lambda x: x.split(">")[1].split("<")[0])
+        # Hide model names since they clutter the plots, and only show them on hover.
         if z is None or z == "None" or z == "":
-            fig = px.scatter(self.cur_df, x=x, y=y, text=text)
+            fig = px.scatter(self.cur_df, x=x, y=y, hover_name=text)
         else:
-            fig = px.scatter_3d(self.cur_df, x=x, y=y, z=z, text=text)
-        fig.update_traces(textposition="top center")
+            fig = px.scatter_3d(self.cur_df, x=x, y=y, z=z, hover_name=text)
+        fig.update_traces(marker=dict(size=12, line=dict(width=2, color="DarkSlateGrey")))
         fig.update_layout(width=width, height=height)
 
         return fig, width, height, ""
