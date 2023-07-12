@@ -6,13 +6,15 @@ import os
 import json
 import copy
 import atexit
-from typing import Generator, Literal
+from typing import Generator, Literal, Iterable, Dict
 
+import gc
+import numpy as np
 import tyro
 import torch
 import rich
 from rich.table import Table
-from fastchat.serve.inference import generate_stream
+from fastchat.serve.inference import prepare_logits_processor
 from fastchat.model.model_adapter import load_model, get_conversation_template
 from zeus.monitor import ZeusMonitor
 
@@ -37,6 +39,194 @@ SYSTEM_PROMPTS = {
     ),
 }
 
+def is_partial_stop(output: str, stop_str: str):
+    """Check whether the output contains a partial stop str."""
+    for i in range(0, min(len(output), len(stop_str))):
+        if stop_str.startswith(output[-i:]):
+            return True
+    return False
+
+@torch.inference_mode()
+def generate_stream(
+    model,
+    tokenizer,
+    params: Dict,
+    device: str,
+    context_len: int = 2048,
+):
+    # Read parameters
+    prompts = params["prompt"]
+    temperature = float(params.get("temperature", 1.0))
+    repetition_penalty = float(params.get("repetition_penalty", 1.0))
+    top_p = float(params.get("top_p", 1.0))
+    top_k = int(params.get("top_k", -1))  # -1 means disable
+    max_new_tokens = int(params.get("max_new_tokens", 256))
+    stop_str = params.get("stop", None)
+    stop_token_ids = params.get("stop_token_ids", None) or []
+    stop_token_ids.append(tokenizer.eos_token_id)
+    batch_size = len(prompts)
+
+    # left append prompts with eos to make all input prompts the same length
+    tokenizer.padding_side = "left" 
+    tokenizer.pad_token = tokenizer.eos_token
+
+    logits_processor = prepare_logits_processor(
+        temperature, repetition_penalty, top_p, top_k
+    )
+
+    input_ids = tokenizer(prompts, padding=True).input_ids
+    output_ids = list(input_ids)
+
+    if model.config.is_encoder_decoder:
+        max_src_len = context_len
+    else:  # truncate
+        max_src_len = context_len - max_new_tokens - 8
+
+    input_ids = [input_id[-max_src_len:] for input_id in input_ids]
+    input_len = len(input_ids[0])
+
+    if model.config.is_encoder_decoder:
+        encoder_output = model.encoder(
+            input_ids=torch.as_tensor(input_ids, device=device)
+        )[0]
+        start_ids = torch.as_tensor(
+            [[model.generation_config.decoder_start_token_id] for _ in range(batch_size)],
+            dtype=torch.int64,
+            device=device,
+        )
+    
+    past_key_values = out = None
+    stopped = np.array(batch_size*[False])
+    for i in range(max_new_tokens):
+        if i == 0:  # prefill
+            if model.config.is_encoder_decoder:
+                out = model.decoder(
+                    input_ids=start_ids,
+                    encoder_hidden_states=encoder_output,
+                    use_cache=True,
+                )
+                logits = model.lm_head(out[0])
+            else:
+                out = model(torch.as_tensor(input_ids, device=device), use_cache=True)
+                logits = out.logits
+            past_key_values = out.past_key_values
+        else:  # decoding
+            if model.config.is_encoder_decoder:
+                out = model.decoder(
+                    input_ids=torch.as_tensor(
+                        [[token[0]] for token in tokens], device=device
+                    ),
+                    encoder_hidden_states=encoder_output,
+                    use_cache=True,
+                    past_key_values=past_key_values,
+                )
+                logits = model.lm_head(out[0])
+            else:
+                out = model(
+                    input_ids=torch.as_tensor(
+                        [[token[0]] for token in tokens], device=device
+                    ),
+                    use_cache=True,
+                    past_key_values=past_key_values,
+                )
+                logits = out.logits
+            past_key_values = out.past_key_values
+
+        if logits_processor:
+            if repetition_penalty > 1.0:
+                tmp_output_ids = torch.as_tensor(output_ids, device=logits.device)
+            else:
+                tmp_output_ids = None
+            last_token_logits = logits_processor(tmp_output_ids, logits[:, -1, :])
+        else:
+            last_token_logits = logits[:, -1, :]
+
+        if device == "mps":
+            # Switch to CPU by avoiding some bugs in mps backend.
+            last_token_logits = last_token_logits.float().to("cpu")
+
+        if temperature < 1e-5 or top_p < 1e-8:  # greedy
+            _, indices = torch.topk(last_token_logits, 2)
+            tokens = [[int(token) for token in query] for query in indices.tolist()]
+        else:
+            probs = torch.softmax(last_token_logits, dim=-1)
+            indices = torch.multinomial(probs, num_samples=2)
+            tokens = [[int(token) for token in query] for query in indices.tolist()]
+        
+        old_stopped = stopped
+        stopped = np.logical_or(old_stopped, np.array([True if token[0] in stop_token_ids else False for token in tokens]))
+        output_ids = [ids + [token[0]] for ids, token in zip(output_ids, tokens)]
+
+        def slice(s, pos):
+            return s[:pos]
+        vec_slice = np.vectorize(slice, otypes=[str])
+        vec_is_partial_stop = np.vectorize(is_partial_stop)
+
+        # Yield the output tokens
+        if any(stopped):
+            tmp_output_ids = [ids[input_len:] for ids in output_ids]
+            rfind_start = 0
+            output = tokenizer.batch_decode(
+                tmp_output_ids,
+                skip_special_tokens=True,
+                spaces_between_special_tokens=False,
+                clean_up_tokenization_spaces=True,
+            )
+            output = np.array(output)
+
+            partially_stopped = np.array(len(output_ids) * [False])
+            different_indices = np.empty(shape=(0,))
+            if stop_str:
+                if isinstance(stop_str, str):
+                    pos_array = np.char.rfind(output, stop_str, rfind_start)
+                    find_stop = pos_array != -1
+                    output[find_stop] = vec_slice(output[find_stop], pos_array[find_stop])
+                    stopped = find_stop
+                    partially_stopped = vec_is_partial_stop(output, stop_str)
+                elif isinstance(stop_str, Iterable):
+                    for each_stop in stop_str:
+                        pos_array = np.char.rfind(output, stop_str, rfind_start)
+                        find_stop = pos_array != -1
+                        output[find_stop] = vec_slice(output[find_stop], pos_array[find_stop])
+                        stopped = find_stop
+                        partially_stopped = partially_stopped | vec_is_partial_stop(output, each_stop)
+                else:
+                    raise ValueError("Invalid stop field type.")
+
+            # Prevent yielding partial stop sequence
+            if not any(partially_stopped):
+                # indicates which request in batch stopped
+                different_indices = np.where(stopped != old_stopped)[0]
+                stop_length = np.array([(i, len(output[i])) for i in different_indices])
+                yield {
+                    "text": output,
+                    "stop_length": stop_length,
+                }
+
+        if all(stopped):
+            break
+
+    false_indices = np.where(stopped == False)[0]
+    if any(stopped) == False:
+        tmp_output_ids = [ids[input_len:] for ids in output_ids]
+        output = tokenizer.batch_decode(
+            tmp_output_ids,
+            skip_special_tokens=True,
+            spaces_between_special_tokens=False,
+            clean_up_tokenization_spaces=True,
+        )
+    stop_length = np.array([(i, len(output[i])) for i in false_indices])
+
+    yield {
+        "text": output,
+        "stop_length": stop_length,
+    }
+
+    # Clean
+    del past_key_values, out
+    gc.collect()
+    torch.cuda.empty_cache()
+
 
 def main(
     model_path: str,
@@ -48,6 +238,7 @@ def main(
     temperature: float = 0.7,
     repitition_penalty: float = 1.0,
     max_new_tokens: int = 512,
+    batch: int = 1,
 ) -> None:
     """Run benchmarking for one model on the entire input file.
 
@@ -125,7 +316,6 @@ def main(
         "max_new_tokens": max_new_tokens,
         "stop": conv_base.stop_str,
         "stop_token_ids": conv_base.stop_token_ids,
-        "echo": False,
     }
 
     monitor = ZeusMonitor(gpu_indices=[torch.cuda.current_device()])
@@ -160,7 +350,7 @@ def main(
 
     def dataloader(input_file: str) -> Generator[tuple[bool, str], None, None]:
         """Yields a tuple of whether this is a warmup run and the input prompt."""
-        for _ in range(3):
+        for _ in range(3*batch):
             yield True, "Say something long and random. I don't care about the content."
         for item in json.load(open(input_file, "r")):
             input_prompt = item["conversations"][0]["value"]
@@ -169,35 +359,53 @@ def main(
     # Warm up the GPU with some random prompts.
     # Forward through all the prompts.
     is_first = True
-    for is_warmup, input_prompt in dataloader(input_file):
+    convs = []
+    prompts = []
+    data_iter = iter(dataloader(input_file))
+
+    end_of_file = False  # flag to track the end of the file
+    while True:
+        try:
+            is_warmup, input_prompt = next(data_iter)
+        except StopIteration:
+            end_of_file = True  # no more data
+
         # Construct the input prompt.
-        conv = copy.deepcopy(conv_base)
-        conv.append_message(conv.roles[0], input_prompt)
-        conv.append_message(conv.roles[1], "")
-        prompt = conv.get_prompt()
-        gen_params["prompt"] = prompt
+        if not end_of_file:
+            conv = copy.deepcopy(conv_base)
+            conv.append_message(conv.roles[0], input_prompt)
+            conv.append_message(conv.roles[1], "")
+            prompt = conv.get_prompt()
+            prompts.append(prompt)
+            convs.append(conv)
+            if (len(convs) < batch): continue
+        gen_params["prompt"] = prompts
 
         # Print input prompt.
-        console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Prompt[/u cyan]:")
-        console.print(prompt.strip() + "\n", markup=False)
+        for i in range(batch):
+            console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Prompt[/u cyan](batch_{i}):")
+            console.print(prompts[i].strip() + "\n", markup=False)
 
         # Generate the ouptut from the model.
-        output_stream = generate_stream(model, tokenizer, gen_params, device="cuda")
+        output_stream = generate_stream(model, tokenizer, gen_params, device="cuda", context_len=2048)
         output = {}
+        batch_token_len = {}
 
         #################################################
         # Inference and measurement zone!
         #################################################
         monitor.begin_window("inference")
         for output in output_stream:
-            pass
+            stop_length = output["stop_length"]
+            for it in stop_length:
+                batch_token_len[it[0]] = it[1]
         measurements = monitor.end_window("inference")
         #################################################
         
         # Record numbers.
         output_text = output["text"]
         if not is_warmup:
-            response_length = len(tokenizer.encode(output_text))  # number of tokens
+            response_length = int(sum(batch_token_len.values()))  # number of valid tokens
             latency = measurements.time
             throughput = response_length / latency
             energy = measurements.total_energy
@@ -207,8 +415,8 @@ def main(
                 "response_length": response_length,
                 "latency": latency,
                 "energy": energy,
-                "input": prompt.strip(),
-                "output": output_text.strip(),
+                "input": [prompt.strip() for prompt in prompts],
+                "output": [output_text[i][:batch_token_len[i]].strip() for i in range(batch)],
             }
             output_str = json.dumps(output, indent=4)
             if not is_warmup:
@@ -220,11 +428,17 @@ def main(
             output_json.flush()
 
         # Print the response.
-        console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Response[/u cyan]:")
-        console.print(output_text.strip() + "\n", markup=False)
+        for i in range(batch):
+            console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Response[/u cyan](batch_{i}):")
+            console.print(output_text[i][:batch_token_len[i]].strip() + "\n", markup=False)
 
         # Print measurement.
         console.print(measurements)
+        convs = []
+        prompts = []
+
+        if end_of_file:
+            break
 
 
 if __name__ == "__main__":
