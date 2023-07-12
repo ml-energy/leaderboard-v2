@@ -382,7 +382,7 @@ def main(
         gen_params["prompt"] = prompts
 
         # Print input prompt.
-        for i in range(batch):
+        for i in range(len(convs)):
             console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Prompt[/u cyan](batch_{i}):")
             console.print(prompts[i].strip() + "\n", markup=False)
 
@@ -411,12 +411,13 @@ def main(
             energy = measurements.total_energy
             output = {
                 "model": model_name_cleaned,
+                "batch": len(convs),
                 "throughput": throughput,
                 "response_length": response_length,
                 "latency": latency,
                 "energy": energy,
                 "input": [prompt.strip() for prompt in prompts],
-                "output": [output_text[i][:batch_token_len[i]].strip() for i in range(batch)],
+                "output": [output_text[i][:batch_token_len[i]].strip() for i in range(len(convs))],
             }
             output_str = json.dumps(output, indent=4)
             if not is_warmup:
@@ -428,7 +429,7 @@ def main(
             output_json.flush()
 
         # Print the response.
-        for i in range(batch):
+        for i in range(len(convs)):
             console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Response[/u cyan](batch_{i}):")
             console.print(output_text[i][:batch_token_len[i]].strip() + "\n", markup=False)
 
