@@ -65,6 +65,20 @@ Find our benchmark script for one model [here](https://github.com/ml-energy/lead
 We randomly sampled around 3000 prompts from the [cleaned ShareGPT dataset](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered).
 See [here](https://github.com/ml-energy/leaderboard/tree/master/sharegpt) for more detail on how we created the benchmark dataset.
 
+## FAQ
+
+### So who's the winner?
+
+It depends on which metric you value most.
+Some may be tightly constrained by electricity consumption, in which case energy would have higher weight.
+Some may just want better model quality, in which case the NLP dataset results will be important.
+Others might want something balanced.
+This is why we support adding custom columns to the table, and let you choose your own winner!
+
+### Where can I find more about ML energy-related resources?
+
+Meet us at the [ML.ENERGY initiative](https://ml.energy) homepage!
+
 ## Contributing
 
 Any kind of contribution is more than welcome!
@@ -84,7 +98,7 @@ Hence, absolute latency, throughput, and energy numbers should not be used to es
 
 Batch size 1, in some sense, is the lowest possible hardware utilization.
 We'll soon benchmark batch sizes larger than 1 without continuous batching for comparison.
-This would show what happens in the case of very high hardware utilization (lest with PyTorch), assuming an ideal case where all sequences in each batch generates the same number of output tokens.
+This would show what happens in the case of very high hardware utilization (although it's with PyTorch), assuming an ideal case where all sequences in each batch generate the same number of output tokens.
 By doing this, we can provide numbers for reasonable comparison without being tied to any existing generative model serving system.
 
 ## Upcoming

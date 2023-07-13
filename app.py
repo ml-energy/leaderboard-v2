@@ -306,16 +306,36 @@ table th:first-child {
     overflow: auto;
     white-space: nowrap;
 }
+
+/* Make tab buttons larger */
+.tab-nav > button {
+    font-size: 18px !important;
+}
+"""
+
+intro_text = """
+<h2>How much energy do modern Large Language Models (LLMs) consume for inference?</h2>
+
+<p style="font-size: 16px">We used <a href="https://ml.energy/zeus">Zeus</a> to benchmark various open source LLMs in terms of how much time and energy they consume for inference.
+Time and energy are of course not the only things we care about -- so we also benchmarked all of the models on a variety of NLP datasets,
+including the ARC Challenge (reasoning), HellaSwag (common sense), and TruthfulQA (truthfulness).</p>
+
+<p style="font-size: 16px">For more detailed information, please take a look at the <b>About</b> tab.
+Every benchmark is limited in some sense -- Before you interpret the results, please take a look at the *Limitations* section there, too.</p>
 """
 
 block = gr.Blocks(css=css)
 with block:
     tbm = gr.State(global_tbm)  # type: ignore
-    gr.HTML("<h1><a href='https://ml.energy' class='text-logo'>ML.ENERGY</a> Leaderboard</h1>")
+    with gr.Box():
+        gr.HTML("<h1><a href='https://ml.energy' class='text-logo'>ML.ENERGY</a> Leaderboard</h1>")
 
     with gr.Tabs():
         # Tab 1: Leaderboard.
-        with gr.TabItem("Leaderboard"):
+        with gr.Tab("Leaderboard"):
+            with gr.Box():
+                gr.HTML(intro_text)
+
             # Block 1: Checkboxes to select benchmarking parameters.
             with gr.Row():
                 with gr.Box():
@@ -335,96 +355,98 @@ with block:
                 checkbox.change(TableManager.set_filter_get_df, inputs=[tbm, *checkboxes], outputs=dataframe)
 
             # Block 3: Allow users to add new columns.
-            gr.Markdown("---\n### Add custom columns to the table")
-            with gr.Row():
-                with gr.Column(scale=3):
-                    with gr.Row():
-                        colname_input = gr.Textbox(lines=1, label="Custom column name")
-                        formula_input = gr.Textbox(lines=1, label="Formula (@sum, @len, @max, and @min are supported)")
-                with gr.Column(scale=1):
-                    with gr.Row():
-                        add_col_btn = gr.Button("Add to table (⏎)", elem_classes=["btn-submit"])
-                    with gr.Row():
-                        clear_input_btn = gr.Button("Clear")
-            with gr.Row():
-                add_col_message = gr.HTML("")
-            gr.Examples(
-                examples=[
-                    ["power", "energy / latency"],
-                    ["token_per_joule", "response_length / energy"],
-                    ["verbose", "response_length > @sum(response_length) / @len(response_length)"],
-                ],
-                inputs=[colname_input, formula_input],
-            )
-            colname_input.submit(
-                TableManager.add_column,
-                inputs=[tbm, colname_input, formula_input],
-                outputs=[dataframe, add_col_message],
-            )
-            formula_input.submit(
-                TableManager.add_column,
-                inputs=[tbm, colname_input, formula_input],
-                outputs=[dataframe, add_col_message],
-            )
-            add_col_btn.click(
-                TableManager.add_column,
-                inputs=[tbm, colname_input, formula_input],
-                outputs=[dataframe, add_col_message],
-            )
-            clear_input_btn.click(
-                lambda: (None, None, None),
-                inputs=None,
-                outputs=[colname_input, formula_input, add_col_message],
-            )
+            with gr.Box():
+                gr.Markdown("### Add custom columns to the table")
+                with gr.Row():
+                    with gr.Column(scale=3):
+                        with gr.Row():
+                            colname_input = gr.Textbox(lines=1, label="Custom column name")
+                            formula_input = gr.Textbox(lines=1, label="Formula (@sum, @len, @max, and @min are supported)")
+                    with gr.Column(scale=1):
+                        with gr.Row():
+                            add_col_btn = gr.Button("Add to table (⏎)", elem_classes=["btn-submit"])
+                        with gr.Row():
+                            clear_input_btn = gr.Button("Clear")
+                with gr.Row():
+                    add_col_message = gr.HTML("")
+                gr.Examples(
+                    examples=[
+                        ["power", "energy / latency"],
+                        ["token_per_joule", "response_length / energy"],
+                        ["verbose", "response_length > @sum(response_length) / @len(response_length)"],
+                    ],
+                    inputs=[colname_input, formula_input],
+                )
+                colname_input.submit(
+                    TableManager.add_column,
+                    inputs=[tbm, colname_input, formula_input],
+                    outputs=[dataframe, add_col_message],
+                )
+                formula_input.submit(
+                    TableManager.add_column,
+                    inputs=[tbm, colname_input, formula_input],
+                    outputs=[dataframe, add_col_message],
+                )
+                add_col_btn.click(
+                    TableManager.add_column,
+                    inputs=[tbm, colname_input, formula_input],
+                    outputs=[dataframe, add_col_message],
+                )
+                clear_input_btn.click(
+                    lambda: (None, None, None),
+                    inputs=None,
+                    outputs=[colname_input, formula_input, add_col_message],
+                )
 
             # Block 4: Allow users to plot 2D and 3D scatter plots.
-            gr.Markdown("---\n### Scatter plot (Hover over marker to show model name)")
-            with gr.Row():
-                with gr.Column(scale=3):
-                    with gr.Row():
-                        # Initialize the dropdown choices with the global TableManager with just the original columns.
-                        axis_dropdowns = global_tbm.get_dropdown()
-                with gr.Column(scale=1):
-                    with gr.Row():
-                        plot_btn = gr.Button("Plot", elem_classes=["btn-submit"])
-                    with gr.Row():
-                        clear_plot_btn = gr.Button("Clear")
-            with gr.Accordion("Plot size (600 x 600 by default)", open=False):
+            with gr.Box():
+                gr.Markdown("### Scatter plot (Hover over marker to show model name)")
                 with gr.Row():
-                    plot_width_input = gr.Textbox("600", lines=1, label="Width (px)")
-                    plot_height_input = gr.Textbox("600", lines=1, label="Height (px)")
-            with gr.Row():
-                plot = gr.Plot()
-            with gr.Row():
-                plot_message = gr.HTML("")
-            add_col_btn.click(TableManager.update_dropdown, inputs=tbm, outputs=axis_dropdowns)  # type: ignore
-            plot_width_input.submit(
-                TableManager.plot_scatter,
-                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
-                outputs=[plot, plot_width_input, plot_height_input, plot_message],
-            )
-            plot_height_input.submit(
-                TableManager.plot_scatter,
-                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
-                outputs=[plot, plot_width_input, plot_height_input, plot_message],
-            )
-            plot_btn.click(
-                TableManager.plot_scatter,
-                inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
-                outputs=[plot, plot_width_input, plot_height_input, plot_message],
-            )
-            clear_plot_btn.click(
-                lambda: (None,) * 7,
-                None,
-                outputs=[*axis_dropdowns, plot, plot_width_input, plot_height_input, plot_message],
-            )
+                    with gr.Column(scale=3):
+                        with gr.Row():
+                            # Initialize the dropdown choices with the global TableManager with just the original columns.
+                            axis_dropdowns = global_tbm.get_dropdown()
+                    with gr.Column(scale=1):
+                        with gr.Row():
+                            plot_btn = gr.Button("Plot", elem_classes=["btn-submit"])
+                        with gr.Row():
+                            clear_plot_btn = gr.Button("Clear")
+                with gr.Accordion("Plot size (600 x 600 by default)", open=False):
+                    with gr.Row():
+                        plot_width_input = gr.Textbox("600", lines=1, label="Width (px)")
+                        plot_height_input = gr.Textbox("600", lines=1, label="Height (px)")
+                with gr.Row():
+                    plot = gr.Plot()
+                with gr.Row():
+                    plot_message = gr.HTML("")
+                add_col_btn.click(TableManager.update_dropdown, inputs=tbm, outputs=axis_dropdowns)  # type: ignore
+                plot_width_input.submit(
+                    TableManager.plot_scatter,
+                    inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
+                    outputs=[plot, plot_width_input, plot_height_input, plot_message],
+                )
+                plot_height_input.submit(
+                    TableManager.plot_scatter,
+                    inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
+                    outputs=[plot, plot_width_input, plot_height_input, plot_message],
+                )
+                plot_btn.click(
+                    TableManager.plot_scatter,
+                    inputs=[tbm, plot_width_input, plot_height_input, *axis_dropdowns],
+                    outputs=[plot, plot_width_input, plot_height_input, plot_message],
+                )
+                clear_plot_btn.click(
+                    lambda: (None,) * 7,
+                    None,
+                    outputs=[*axis_dropdowns, plot, plot_width_input, plot_height_input, plot_message],
+                )
 
             # Block 5: Leaderboard date.
             with gr.Row():
                 gr.HTML(f"<h3 style='color: gray'>Last updated: {current_date}</h3>")
 
         # Tab 2: About page.
-        with gr.TabItem("About"):
+        with gr.Tab("About"):
             # Read in LEADERBOARD.md
             gr.Markdown(open("LEADERBOARD.md").read())
 
