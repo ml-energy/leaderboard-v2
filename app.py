@@ -160,8 +160,8 @@ class TableManager:
     def get_dropdown(self):
         columns = self.full_df.columns.tolist()[1:]
         return [
-            gr.Dropdown(choices=columns, label="X"),
-            gr.Dropdown(choices=columns, label="Y"),
+            gr.Dropdown(choices=columns, value="parameters", label="X"),
+            gr.Dropdown(choices=columns, value="energy", label="Y"),
             gr.Dropdown(choices=["None", *columns], label="Z (optional)"),
         ]
 
@@ -416,7 +416,13 @@ with block:
                         plot_width_input = gr.Textbox("600", lines=1, label="Width (px)")
                         plot_height_input = gr.Textbox("600", lines=1, label="Height (px)")
                 with gr.Row():
-                    plot = gr.Plot()
+                    plot = gr.Plot(value=global_tbm.plot_scatter(
+                        plot_width_input.value,
+                        plot_height_input.value,
+                        x=axis_dropdowns[0].value,
+                        y=axis_dropdowns[1].value,
+                        z=axis_dropdowns[2].value,
+                    )[0])  # type: ignore
                 with gr.Row():
                     plot_message = gr.HTML("")
                 add_col_btn.click(TableManager.update_dropdown, inputs=tbm, outputs=axis_dropdowns)  # type: ignore
