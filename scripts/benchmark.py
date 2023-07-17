@@ -268,7 +268,7 @@ def main(
         model_path = model_path[:-1]
     model_name_cleaned = "--".join(model_path.split("/")[-2:])
     output_dir = f"{output_dir}/{task}/{model_name_cleaned}"
-    output_csv_path = f"{output_dir}/benchmark.json"
+    output_csv_path = f"{output_dir}/benchmark_batch_{batch}.json"
     config_json_path = f"{output_dir}/config.json"
     table = Table(title="Benchmark")
     table.add_column("Configuration")
@@ -380,6 +380,8 @@ def main(
             convs.append(conv)
             if (len(convs) < batch): continue
         gen_params["prompt"] = prompts
+        if end_of_file and len(prompts) == 0:
+            break
 
         # Print input prompt.
         for i in range(len(convs)):
