@@ -37,6 +37,13 @@ SYSTEM_PROMPTS = {
         "Write a response that appropriately completes the request. "
         "The response should be very concise. "
     ),
+    "llama-2": (
+        "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. "
+        "Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. "
+        "Please ensure that your responses are socially unbiased and positive in nature.\n\n"
+        "If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. "
+        "If you don't know the answer to a question, please don't share false information."
+    ),
 }
 
 def is_partial_stop(output: str, stop_str: str):
@@ -304,7 +311,12 @@ def main(
     conv_base = get_conversation_template(model_path)
 
     # Standardize the system prompt for every model.
-    conv_base.system = SYSTEM_PROMPTS[task]
+    if "llama-2" in model_path.lower():
+        conv_base.system = f"<s>[INST] <<SYS>>\n{SYSTEM_PROMPTS[task]}\n<</SYS>>\n\n"
+    elif "stablelm" in model_path.lower():
+        conv_base.system = f"""<|SYSTEM|># {SYSTEM_PROMPTS[task]}\n"""
+    else:
+        conv_base.system = SYSTEM_PROMPTS[task]
     conv_base.messages = []
     conv_base.offset = 0
 
