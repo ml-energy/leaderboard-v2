@@ -5,6 +5,7 @@ import yaml
 import requests
 import itertools
 import contextlib
+import argparse
 from dateutil import parser, tz
 
 import numpy as np
@@ -324,6 +325,28 @@ including the ARC Challenge (reasoning), HellaSwag (common sense), and TruthfulQ
 Every benchmark is limited in some sense -- Before you interpret the results, please take a look at the *Limitations* section there, too.</p>
 """
 
+controller_addr = 'http://controller:8000'
+# connect to controller
+def send_controller( model_name, prompt):
+    print(f"Forward {prompt} of {model_name} to controller")
+
+    url = controller_addr + "/request"
+    data = {
+        "model_name": model_name,
+        "prompt": prompt
+    }
+    r = requests.post(url, json=data)
+    assert r.status_code == 200
+    return r.json()
+
+# query to controller's models
+def get_models():
+    url = controller_addr + "/get_models"
+    r = requests.post(url)
+    print(f"Available model list: {r.content}")
+    assert r.status_code == 200
+    return r.json()
+
 block = gr.Blocks(css=css)
 with block:
     tbm = gr.State(global_tbm)  # type: ignore
@@ -451,7 +474,80 @@ with block:
             with gr.Row():
                 gr.HTML(f"<h3 style='color: gray'>Last updated: {current_date}</h3>")
 
-        # Tab 2: About page.
+
+        models = get_models()
+        num_sides = min(len(models), 2)
+        chat_models = [None] * num_sides
+        model_selection = [None] * num_sides
+        # Tab 2: Arena.
+        with gr.TabItem("Arena🥊"):
+            # TODO: add readme
+            # Read in LEADERBOARD.md
+            # gr.Markdown(open("ARENA.md").read())
+            with gr.Row():
+                with gr.Column(scale=20):
+                    prompt_text = gr.Textbox(
+                        show_label=False,
+                        placeholder="Enter text and press ENTER"
+                    )
+                with gr.Column(scale=1, min_width=50):
+                    request_btn = gr.Button(value="📤", elem_classes=["btn-submit"])
+
+            # drop down to select models
+            with gr.Box(elem_id="share-region-named"):
+                with gr.Row():
+                    for i in range(num_sides):
+                        # TODO: random initial choice
+                        with gr.Column():
+                            model_selection[i] = gr.Dropdown(
+                                choices=models,
+                                value=models[i],
+                                interactive=True,
+                                show_label=False,
+                            )
+
+                with gr.Row():
+                    for i in range(num_sides):
+                        label = "Model A" if i == 0 else "Model B"
+                        with gr.Column():
+                            chat_models[i] = gr.Chatbot(
+                                label=label, elem_id=f"chatbot"
+                            )
+
+            with gr.Row() as button_row:
+                leftvote_btn = gr.Button(value="👈  A is better", interactive=False)
+                rightvote_btn = gr.Button(value="👉  B is better", interactive=False)
+                tie_btn = gr.Button(value="🤝  Tie", interactive=False)
+                bothbad_btn = gr.Button(value="👎  Both are bad", interactive=False)
+
+            with gr.Row():
+                clear = gr.Button("Clear")
+
+            def add_prompt(user_message, history):
+                return "", history + [[user_message, None]]
+
+            def create_get_response_func(model_name, history):
+                system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
+                response = send_controller(model_name, system_prompt + history[-1][0])
+                history[-1][1] = ""
+                print("Response: ", response)
+                for character in response:
+                    history[-1][1] += character
+                    # time.sleep(0.01)
+                    yield history
+
+            for i in range(num_sides):
+                # TODO: add prompt; context
+                prompt_text.submit(add_prompt, [prompt_text, chat_models[i]], [prompt_text, chat_models[i]], queue=True).then(
+                    create_get_response_func, [model_selection[i], chat_models[i]], chat_models[i]
+                )
+                request_btn.click(add_prompt, [prompt_text, chat_models[i]], [prompt_text, chat_models[i]], queue=True).then(
+                    create_get_response_func, [model_selection[i], chat_models[i]], chat_models[i]
+                )
+
+            clear.click(lambda: None, None, chat_models[i], queue=False)
+
+        # Tab 3: About page.
         with gr.Tab("About"):
             # Read in LEADERBOARD.md
             gr.Markdown(open("LEADERBOARD.md").read())
@@ -459,4 +555,14 @@ with block:
     # Load the table on page load.
     block.load(lambda: global_tbm.set_filter_get_df(), outputs=dataframe)
 
-block.launch()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--share", action="store_true", help="Specify if sharing is enabled")
+    parser.add_argument("--concurrency", type=int, default=10)
+
+    args = parser.parse_args()
+    block.queue(
+        concurrency_count=args.concurrency, status_update_rate=10, api_open=False
+    ).launch(share=args.share)
+

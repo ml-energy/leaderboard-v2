@@ -1,0 +1,19 @@
+models:
+  - name: bigscience/bloom-560m
+    instances:
+      - ip_address: worker0
+        port: 8001
+        docker_port: 8000
+        device: '"device=0"'
+        num_shard: 1
+        data_path: $HOME/data
+  - name: tiiuae/falcon-7b
+    instances:
+      - ip_address: worker1
+        port: 8002
+        docker_port: 8000
+        device: '"device=0"'
+        num_shard: 1
+        data_path: $HOME/data
+
+
