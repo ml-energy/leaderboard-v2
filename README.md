@@ -52,6 +52,6 @@ We run benchmarks using multiple nodes and GPUs using [Pegasus](https://github.c
 You can still run benchmarks without Pegasus like this:
 
 ```console
-$ docker exec leaderboard0 python scripts/benchmark.py --model-path /data/leaderboard/weights/lmsys/vicuna-13B --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json
-$ docker exec leaderboard0 python scripts/benchmark.py --model-path databricks/dolly-v2-12b --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json
+$ docker exec leaderboard0 python scripts/benchmark.py --model-path /data/leaderboard/weights/lmsys/vicuna-13B --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json
+$ docker exec leaderboard0 python scripts/benchmark.py --model-path databricks/dolly-v2-12b --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json
 ```
