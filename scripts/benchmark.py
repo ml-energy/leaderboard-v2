@@ -204,7 +204,7 @@ def generate_stream(
             if not any(partially_stopped):
                 # indicates which request in batch stopped
                 different_indices = np.where(stopped != old_stopped)[0]
-                stop_length = np.array([(i, len(output[i])) for i in different_indices])
+                stop_length = np.array([(j, i+1) for j in different_indices])
                 yield {
                     "text": output,
                     "stop_length": stop_length,
@@ -222,7 +222,7 @@ def generate_stream(
             spaces_between_special_tokens=False,
             clean_up_tokenization_spaces=True,
         )
-    stop_length = np.array([(i, len(output[i])) for i in false_indices])
+    stop_length = np.array([(i, max_new_tokens) for i in false_indices])
 
     yield {
         "text": output,
@@ -419,7 +419,8 @@ def main(
         # Record numbers.
         output_text = output["text"]
         if not is_warmup:
-            response_length = int(sum(batch_token_len.values()))  # number of valid tokens
+            total_length = int(sum(batch_token_len.values()))  # number of valid tokens
+            response_length = float(total_length) / len(convs)
             latency = measurements.time
             throughput = response_length / latency
             energy = measurements.total_energy
