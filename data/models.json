@@ -29,9 +29,9 @@
         "nickname": "Camel-AI/CAMEL-13B-Combined-Data",
         "params": 13
     },
-    "BlinkDL/RWKV-4-Raven-7B-v12-Eng98%-Other2%-20230521-ctx8192.pth": {
-        "url": "https://huggingface.co/BlinkDL/rwkv-4-raven",
-        "nickname": "BlinkDL/RWKV-4-Raven-7B",
+    "RWKV/rwkv-raven-7b": {
+        "url": "https://huggingface.co/RWKV/rwkv-raven-7b",
+        "nickname": "RWKV/rwkv-raven-7b",
         "params": 7
     },
     "databricks/dolly-v2-12b": {
