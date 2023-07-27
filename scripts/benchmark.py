@@ -153,55 +153,60 @@ def generate_stream(
             indices = torch.multinomial(probs, num_samples=2)
             tokens = [[int(token) for token in query] for query in indices.tolist()]
         
+        tmp_output_ids = [ids[input_len:] for ids in output_ids]
+        rfind_start = 0
+        output = tokenizer.batch_decode(
+            tmp_output_ids,
+            skip_special_tokens=True,
+            spaces_between_special_tokens=False,
+            clean_up_tokenization_spaces=True,
+        )
+        output_np = np.array(output)
+        
+        # deal with stop_token_ids
         old_stopped = stopped
         stopped = np.logical_or(old_stopped, np.array([True if token[0] in stop_token_ids else False for token in tokens]))
+        different_indices = np.where(stopped != old_stopped)[0]
+        if different_indices.size > 0:
+            # here i but not i+1 is because the i+1 token generated is in stop_token_ids
+            stop_token = np.array([(j, i) for j in different_indices])
+            stop_str_length = np.array([(j, len(output[j])) for j in different_indices])
+            yield {
+                "text": output,
+                "stop_token": stop_token,
+                "stop_str_length": stop_str_length,
+            }
+
+        # deal with stop_str
         output_ids = [ids + [token[0]] for ids, token in zip(output_ids, tokens)]
 
-        def slice(s, pos):
-            return s[:pos]
-        vec_slice = np.vectorize(slice, otypes=[str])
-        vec_is_partial_stop = np.vectorize(is_partial_stop)
+        if stop_str:
+            def slice(s, pos):
+                return s[:pos]
+            vec_slice = np.vectorize(slice, otypes=[str])
 
-        # Yield the output tokens
-        if any(stopped):
-            tmp_output_ids = [ids[input_len:] for ids in output_ids]
-            rfind_start = 0
-            output = tokenizer.batch_decode(
-                tmp_output_ids,
-                skip_special_tokens=True,
-                spaces_between_special_tokens=False,
-                clean_up_tokenization_spaces=True,
-            )
-            output = np.array(output)
-
-            partially_stopped = np.array(len(output_ids) * [False])
-            different_indices = np.empty(shape=(0,))
-            if stop_str:
-                if isinstance(stop_str, str):
-                    pos_array = np.char.rfind(output, stop_str, rfind_start)
+            if isinstance(stop_str, str):
+                pos_array = np.char.rfind(output_np, stop_str, rfind_start)
+                find_stop = pos_array != -1
+                output_np[find_stop] = vec_slice(output_np[find_stop], pos_array[find_stop])
+            elif isinstance(stop_str, Iterable):
+                for each_stop in stop_str:
+                    pos_array = np.char.rfind(output_np, each_stop, rfind_start)
                     find_stop = pos_array != -1
-                    output[find_stop] = vec_slice(output[find_stop], pos_array[find_stop])
-                    stopped = find_stop
-                    partially_stopped = vec_is_partial_stop(output, stop_str)
-                elif isinstance(stop_str, Iterable):
-                    for each_stop in stop_str:
-                        pos_array = np.char.rfind(output, stop_str, rfind_start)
-                        find_stop = pos_array != -1
-                        output[find_stop] = vec_slice(output[find_stop], pos_array[find_stop])
-                        stopped = find_stop
-                        partially_stopped = partially_stopped | vec_is_partial_stop(output, each_stop)
-                else:
-                    raise ValueError("Invalid stop field type.")
-
-            # Prevent yielding partial stop sequence
-            if not any(partially_stopped):
-                # indicates which request in batch stopped
-                different_indices = np.where(stopped != old_stopped)[0]
-                stop_length = np.array([(j, i+1) for j in different_indices])
+                    output_np[find_stop] = vec_slice(output_np[find_stop], pos_array[find_stop])
+            else:
+                raise ValueError("Invalid stop field type.")
+            
+            stop_str_indices = np.where(find_stop & ~stopped)[0]
+            if stop_str_indices.size > 0:
+                stop_token = np.array([(j, i+1) for j in stop_str_indices])
+                stop_str_length = np.array([(j, len(output_np[j])) for j in stop_str_indices])
                 yield {
-                    "text": output,
-                    "stop_length": stop_length,
+                    "text": output_np,
+                    "stop_token": stop_token,
+                    "stop_str_length": stop_str_length,
                 }
+                stopped[find_stop] = True
 
         if all(stopped):
             break
@@ -215,11 +220,13 @@ def generate_stream(
             spaces_between_special_tokens=False,
             clean_up_tokenization_spaces=True,
         )
-    stop_length = np.array([(i, max_new_tokens) for i in false_indices])
+    stop_token = np.array([(i, max_new_tokens) for i in false_indices])
+    stop_str_length = np.array([(i, len(output[i])) for i in false_indices])
 
     yield {
         "text": output,
-        "stop_length": stop_length,
+        "stop_token": stop_token,
+        "stop_str_length": stop_str_length,
     }
 
     # Clean
@@ -347,6 +354,7 @@ def main(
                 "temperature": temperature,
                 "repitition_penalty": repitition_penalty,
                 "max_new_tokens": max_new_tokens,
+                "batch_size": batch,
             },
             config_json,
             indent=4,
@@ -397,35 +405,37 @@ def main(
         output_stream = generate_stream(model, tokenizer, gen_params, device="cuda", context_len=2048)
         output = {}
         batch_token_len = {}
+        batch_str_len = {}
 
         #################################################
         # Inference and measurement zone!
         #################################################
         monitor.begin_window("inference")
         for output in output_stream:
-            stop_length = output["stop_length"]
-            for it in stop_length:
+            stop_token = output["stop_token"]
+            stop_str = output["stop_str_length"]
+            for it in stop_token:
                 batch_token_len[it[0]] = it[1]
+            for it in stop_str:
+                batch_str_len[it[0]] = it[1]
         measurements = monitor.end_window("inference")
         #################################################
         
         # Record numbers.
         output_text = output["text"]
         if not is_warmup:
-            total_length = int(sum(batch_token_len.values()))  # number of valid tokens
-            response_length = float(total_length) / len(convs)
+            response_length = int(sum(batch_token_len.values()))  # number of valid tokens
             latency = measurements.time
             throughput = response_length / latency
             energy = measurements.total_energy
             output = {
                 "model": model_name_cleaned,
-                "batch": len(convs),
                 "throughput": throughput,
                 "response_length": response_length,
                 "latency": latency,
                 "energy": energy,
                 "input": [prompt.strip() for prompt in prompts],
-                "output": [output_text[i][:batch_token_len[i]].strip() for i in range(len(convs))],
+                "output": [output_text[i][:batch_str_len[i]].strip() for i in range(len(convs))],
             }
             output_str = json.dumps(output, indent=4)
             if not is_warmup:
@@ -439,7 +449,7 @@ def main(
         # Print the response.
         for i in range(len(convs)):
             console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Response[/u cyan](batch_{i}):")
-            console.print(output_text[i][:batch_token_len[i]].strip() + "\n", markup=False)
+            console.print(output_text[i][:batch_str_len[i]].strip() + "\n", markup=False)
 
         # Print measurement.
         console.print(measurements)
