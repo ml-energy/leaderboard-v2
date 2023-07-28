@@ -7,6 +7,8 @@ import json
 import copy
 import atexit
 from typing import Generator, Literal, Iterable, Dict
+from torch.utils.data import Dataset, DataLoader
+from dataclasses import dataclass
 
 import gc
 import numpy as np
@@ -39,21 +41,20 @@ SYSTEM_PROMPTS = {
     ),
 }
 
-def is_partial_stop(output: str, stop_str: str):
-    """Check whether the output contains a partial stop str."""
-    for i in range(0, min(len(output), len(stop_str))):
-        if stop_str.startswith(output[-i:]):
-            return True
-    return False
+@dataclass
+class Output:
+    response_length: int
+    input: str
+    output: str
 
 @torch.inference_mode()
-def generate_stream(
+def run_inference(
     model,
     tokenizer,
     params: Dict,
     device: str,
     context_len: int = 2048,
-):
+) ->list[Output]:
     # Read parameters
     prompts = params["prompt"]
     temperature = float(params.get("temperature", 1.0))
@@ -62,9 +63,15 @@ def generate_stream(
     top_k = int(params.get("top_k", -1))  # -1 means disable
     max_new_tokens = int(params.get("max_new_tokens", 256))
     stop_str = params.get("stop", None)
-    stop_token_ids = params.get("stop_token_ids", None) or []
+    stop_token_ids = list(params.get("stop_token_ids", None) or [])
     stop_token_ids.append(tokenizer.eos_token_id)
     batch_size = len(prompts)
+
+    empty_result = Output(response_length=-1, input="", output="")
+    result = []
+    for i, prompt in enumerate(prompts):
+        result.append(copy.deepcopy(empty_result))
+        result[i].input = prompt
 
     # left append prompts with eos to make all input prompts the same length
     tokenizer.padding_side = "left" 
@@ -75,15 +82,14 @@ def generate_stream(
     )
 
     input_ids = tokenizer(prompts, padding=True).input_ids
-    output_ids = list(input_ids)
+    output_ids = [[] for _ in range(batch_size)]
 
     if model.config.is_encoder_decoder:
         max_src_len = context_len
     else:  # truncate
-        max_src_len = context_len - max_new_tokens - 8
+        max_src_len = context_len - max_new_tokens - 1
 
     input_ids = [input_id[-max_src_len:] for input_id in input_ids]
-    input_len = len(input_ids[0])
 
     if model.config.is_encoder_decoder:
         encoder_output = model.encoder(
@@ -141,98 +147,73 @@ def generate_stream(
         else:
             last_token_logits = logits[:, -1, :]
 
-        if device == "mps":
-            # Switch to CPU by avoiding some bugs in mps backend.
-            last_token_logits = last_token_logits.float().to("cpu")
-
         if temperature < 1e-5 or top_p < 1e-8:  # greedy
-            _, indices = torch.topk(last_token_logits, 2)
+            _, indices = torch.topk(last_token_logits, 1)
             tokens = [[int(token) for token in query] for query in indices.tolist()]
         else:
             probs = torch.softmax(last_token_logits, dim=-1)
-            indices = torch.multinomial(probs, num_samples=2)
+            indices = torch.multinomial(probs, num_samples=1)
             tokens = [[int(token) for token in query] for query in indices.tolist()]
-        
-        tmp_output_ids = [ids[input_len:] for ids in output_ids]
-        rfind_start = 0
-        output = tokenizer.batch_decode(
-            tmp_output_ids,
-            skip_special_tokens=True,
-            spaces_between_special_tokens=False,
-            clean_up_tokenization_spaces=True,
-        )
-        output_np = np.array(output)
+
+        output_ids = [ids + token for ids, token in zip(output_ids, tokens)]
         
         # deal with stop_token_ids
         old_stopped = stopped
         stopped = np.logical_or(old_stopped, np.array([True if token[0] in stop_token_ids else False for token in tokens]))
         different_indices = np.where(stopped != old_stopped)[0]
+
         if different_indices.size > 0:
             # here i but not i+1 is because the i+1 token generated is in stop_token_ids
-            stop_token = np.array([(j, i) for j in different_indices])
-            stop_str_length = np.array([(j, len(output[j])) for j in different_indices])
-            yield {
-                "text": output,
-                "stop_token": stop_token,
-                "stop_str_length": stop_str_length,
-            }
+            for j in different_indices:
+                result[j].response_length = i
+                result[j].output = output[j]
+
+        rfind_start = 0
+        output = tokenizer.batch_decode(
+            output_ids,
+            skip_special_tokens=True,
+            spaces_between_special_tokens=False,
+            clean_up_tokenization_spaces=True,
+        )
+        output_np = np.array(output)
 
         # deal with stop_str
-        output_ids = [ids + [token[0]] for ids, token in zip(output_ids, tokens)]
-
         if stop_str:
-            def slice(s, pos):
-                return s[:pos]
-            vec_slice = np.vectorize(slice, otypes=[str])
-
             if isinstance(stop_str, str):
                 pos_array = np.char.rfind(output_np, stop_str, rfind_start)
                 find_stop = pos_array != -1
-                output_np[find_stop] = vec_slice(output_np[find_stop], pos_array[find_stop])
             elif isinstance(stop_str, Iterable):
                 for each_stop in stop_str:
                     pos_array = np.char.rfind(output_np, each_stop, rfind_start)
                     find_stop = pos_array != -1
-                    output_np[find_stop] = vec_slice(output_np[find_stop], pos_array[find_stop])
             else:
                 raise ValueError("Invalid stop field type.")
-            
+
             stop_str_indices = np.where(find_stop & ~stopped)[0]
             if stop_str_indices.size > 0:
-                stop_token = np.array([(j, i+1) for j in stop_str_indices])
-                stop_str_length = np.array([(j, len(output_np[j])) for j in stop_str_indices])
-                yield {
-                    "text": output_np,
-                    "stop_token": stop_token,
-                    "stop_str_length": stop_str_length,
-                }
+                for j in stop_str_indices:
+                    # TODO: find a elegant way to figure out the size of stop_str, here just suppose stop_str has one token
+                    result[j].response_length = i
+                    result[j].output = output[j][:pos_array[j]]
                 stopped[find_stop] = True
 
         if all(stopped):
             break
 
-    false_indices = np.where(stopped == False)[0]
+    not_finish_indices = np.where(stopped == False)[0]
     if any(stopped) == False:
-        tmp_output_ids = [ids[input_len:] for ids in output_ids]
         output = tokenizer.batch_decode(
-            tmp_output_ids,
+            output_ids,
             skip_special_tokens=True,
             spaces_between_special_tokens=False,
             clean_up_tokenization_spaces=True,
         )
-    stop_token = np.array([(i, max_new_tokens) for i in false_indices])
-    stop_str_length = np.array([(i, len(output[i])) for i in false_indices])
 
-    yield {
-        "text": output,
-        "stop_token": stop_token,
-        "stop_str_length": stop_str_length,
-    }
+        for j in not_finish_indices:
+            result[j].response_length = max_new_tokens
+            result[j].output = output[j]
 
-    # Clean
-    del past_key_values, out
-    gc.collect()
-    torch.cuda.empty_cache()
+    return result
 
 
 def main(
@@ -361,70 +342,63 @@ def main(
         )
         config_json.write("\n")
 
-    def dataloader(input_file: str) -> Generator[tuple[bool, str], None, None]:
+    class CustomDataset(Dataset):
+        def __init__(self, data):
+            self.data = data
+
+        def __len__(self):
+            return len(self.data)
+
+        def __getitem__(self, index):
+            sample = self.data[index]
+            return sample["conversations"][0]["value"]
+
+
+    def dataloader(input_file: str, batch_size: batch) -> Generator[tuple[bool, str], None, None]:
         """Yields a tuple of whether this is a warmup run and the input prompt."""
-        for _ in range(3*batch):
-            yield True, "Say something long and random. I don't care about the content."
-        for item in json.load(open(input_file, "r")):
-            input_prompt = item["conversations"][0]["value"]
-            yield False, input_prompt
+        for _ in range(3):
+            yield True, ["Say something long and random. I don't care about the content." for _ in range (batch)]
+        data = json.load(open(input_file, "r"))
+        custom_dataset = CustomDataset(data)
+        data_loader = DataLoader(custom_dataset, batch_size=batch_size, shuffle=False)
+        for prompt in data_loader:
+            yield False, prompt
 
     # Warm up the GPU with some random prompts.
     # Forward through all the prompts.
     is_first = True
     convs = []
     prompts = []
-    data_iter = iter(dataloader(input_file))
-
-    end_of_file = False  # flag to track the end of the file
-    while True:
-        try:
-            is_warmup, input_prompt = next(data_iter)
-        except StopIteration:
-            end_of_file = True  # no more data
-
+    data_iter = iter(dataloader(input_file, batch))
+    
+    for is_warmup, input_prompts in data_iter:
         # Construct the input prompt.
-        if not end_of_file:
+        for i in range(batch):
             conv = copy.deepcopy(conv_base)
-            conv.append_message(conv.roles[0], input_prompt)
+            conv.append_message(conv.roles[0], input_prompts[i])
             conv.append_message(conv.roles[1], "")
             prompt = conv.get_prompt()
             prompts.append(prompt)
             convs.append(conv)
-            if (len(convs) < batch): continue
+
         gen_params["prompt"] = prompts
-        if end_of_file and len(prompts) == 0:
-            break
 
         # Print input prompt.
         for i in range(len(convs)):
             console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Prompt[/u cyan](batch_{i}):")
             console.print(prompts[i].strip() + "\n", markup=False)
 
-        # Generate the ouptut from the model.
-        output_stream = generate_stream(model, tokenizer, gen_params, device="cuda", context_len=2048)
-        output = {}
-        batch_token_len = {}
-        batch_str_len = {}
-
         #################################################
         # Inference and measurement zone!
         #################################################
         monitor.begin_window("inference")
-        for output in output_stream:
-            stop_token = output["stop_token"]
-            stop_str = output["stop_str_length"]
-            for it in stop_token:
-                batch_token_len[it[0]] = it[1]
-            for it in stop_str:
-                batch_str_len[it[0]] = it[1]
+        results = run_inference(model, tokenizer, gen_params, device="cuda", context_len=2048)
         measurements = monitor.end_window("inference")
         #################################################
         
         # Record numbers.
-        output_text = output["text"]
         if not is_warmup:
-            response_length = int(sum(batch_token_len.values()))  # number of valid tokens
+            response_length = sum([result.response_length for result in results])  # number of valid tokens
             latency = measurements.time
             throughput = response_length / latency
             energy = measurements.total_energy
@@ -435,7 +409,7 @@ def main(
                 "latency": latency,
                 "energy": energy,
                 "input": [prompt.strip() for prompt in prompts],
-                "output": [output_text[i][:batch_str_len[i]].strip() for i in range(len(convs))],
+                "output": [(result.output).strip() for result in results],
             }
             output_str = json.dumps(output, indent=4)
             if not is_warmup:
@@ -449,16 +423,12 @@ def main(
         # Print the response.
         for i in range(len(convs)):
             console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Response[/u cyan](batch_{i}):")
-            console.print(output_text[i][:batch_str_len[i]].strip() + "\n", markup=False)
+            console.print(results[i].output.strip() + "\n", markup=False)
 
         # Print measurement.
         console.print(measurements)
         convs = []
         prompts = []
-
-        if end_of_file:
-            break
-
 
 if __name__ == "__main__":
     tyro.cli(main)
