@@ -148,14 +148,14 @@ def run_inference(
             last_token_logits = logits[:, -1, :]
 
         if temperature < 1e-5 or top_p < 1e-8:  # greedy
-            _, indices = torch.topk(last_token_logits, 1)
+            _, indices = torch.topk(last_token_logits, 2)
             tokens = [[int(token) for token in query] for query in indices.tolist()]
         else:
             probs = torch.softmax(last_token_logits, dim=-1)
-            indices = torch.multinomial(probs, num_samples=1)
+            indices = torch.multinomial(probs, num_samples=2)
             tokens = [[int(token) for token in query] for query in indices.tolist()]
 
-        output_ids = [ids + token for ids, token in zip(output_ids, tokens)]
+        output_ids = [ids + [token[0]] for ids, token in zip(output_ids, tokens)]
         
         # deal with stop_token_ids
         old_stopped = stopped
