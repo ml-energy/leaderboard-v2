@@ -6,6 +6,7 @@ import requests
 import itertools
 import contextlib
 import argparse
+import random
 from dateutil import parser, tz
 
 import numpy as np
@@ -16,7 +17,8 @@ import plotly.express as px
 from pandas.api.types import is_numeric_dtype, is_float_dtype
 
 pio.templates.default = "plotly_white"
-
+from logger import setup_logger
+logger = setup_logger()
 
 class TableManager:
     def __init__(self, data_dir: str) -> None:
@@ -328,8 +330,7 @@ Every benchmark is limited in some sense -- Before you interpret the results, pl
 controller_addr = 'http://controller:8000'
 # connect to controller
 def send_controller( model_name, prompt):
-    print(f"Forward {prompt} of {model_name} to controller")
-
+    logger.info(f"Prompt: {prompt}")
     url = controller_addr + "/request"
     data = {
         "model_name": model_name,
@@ -337,7 +338,8 @@ def send_controller( model_name, prompt):
     }
     r = requests.post(url, json=data)
     assert r.status_code == 200
-    return r.json()
+    response = r.json()
+    return [r[0] for r in response], [r[1] for r in response]
 
 # query to controller's models
 def get_models():
@@ -346,6 +348,53 @@ def get_models():
     print(f"Available model list: {r.content}")
     assert r.status_code == 200
     return r.json()
+
+def add_prompt(user_message, history_a, history_b):
+    picked_model_name = random.sample(models, min(2, len(models)))
+    return "", history_a + [[user_message, None]], history_b + [[user_message, None]], picked_model_name[0], \
+           picked_model_name[1] if len(picked_model_name) > 1 else None
+
+def create_get_response_func(model_name_a, model_name_b, history_a, history_b):
+    model_name_a = model_name_a.strip('<p>').replace('</p>', '').strip('\n')
+    model_name_b = model_name_b.strip('<p>').replace('</p>', '').strip('\n')
+
+    total_energy_a = total_energy_b = 0
+    system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
+    response_a, energy_a = send_controller(model_name_a, system_prompt + history_a[-1][0])
+    response_b, energy_b = send_controller(model_name_b, system_prompt + history_b[-1][0])
+    history_a[-1][1] = ""
+    history_b[-1][1] = ""
+    for character_a, character_b,e_a, e_b in zip(response_a, response_b, energy_a, energy_b):
+        history_a[-1][1] += character_a
+        history_b[-1][1] += character_b
+        total_energy_a += e_a
+        total_energy_b += e_b
+        yield history_a, history_b, gr.Markdown.update(), gr.Markdown.update("*"+str(total_energy_a)+"*"),  gr.Markdown.update(), gr.Markdown.update("*"+str(total_energy_b)+"*" )
+    # Can speed up by separating the energy calculation and the response generation
+
+def leftvote_last_response(model_name_a, model_name_b):
+    logger.info(f"NLP task Vote: {model_name_a} > {model_name_b}")
+    return [disable_btn for _ in range(4)]
+
+def rightvote_last_response(model_name_a, model_name_b):
+    logger.info(f"NLP task Vote: {model_name_a} < {model_name_b}")
+    return [disable_btn for _ in range(4)]
+
+def tievote_last_response(model_name_a, model_name_b):
+    logger.info(f"NLP task Vote: {model_name_a} = {model_name_b}")
+    return [disable_btn for _ in range(4)]
+
+def bothbad_vote_last_response(model_name_a, model_name_b):
+    logger.info(f"NLP task Vote: {model_name_a} = {model_name_b} = Bad")
+    return [disable_btn for _ in range(4)]
+
+def left_energy_vote_last_response(model_name_a, model_name_b):
+    logger.info(f"Energy-efficient vote: {model_name_a} > {model_name_b}")
+    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)]
+
+def right_energy_vote_last_response(model_name_a, model_name_b):
+    logger.info(f"Energy-efficient vote: {model_name_a} < {model_name_b}")
+    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)]
 
 block = gr.Blocks(css=css)
 with block:
@@ -478,11 +527,15 @@ with block:
         models = get_models()
         num_sides = min(len(models), 2)
         chat_models = [None] * num_sides
-        model_selection = [None] * num_sides
+        masked_model_name = [None] * num_sides
+        anony_names = [None] * num_sides
+
+        enable_btn = gr.Button.update(interactive=True)
+        disable_btn = gr.Button.update(interactive=False)
+
         # Tab 2: Arena.
         with gr.TabItem("Arena🥊"):
             # TODO: add readme
-            # Read in LEADERBOARD.md
             # gr.Markdown(open("ARENA.md").read())
             with gr.Row():
                 with gr.Column(scale=20):
@@ -497,14 +550,8 @@ with block:
             with gr.Box(elem_id="share-region-named"):
                 with gr.Row():
                     for i in range(num_sides):
-                        # TODO: random initial choice
                         with gr.Column():
-                            model_selection[i] = gr.Dropdown(
-                                choices=models,
-                                value=models[i],
-                                interactive=True,
-                                show_label=False,
-                            )
+                            masked_model_name[i] = gr.Markdown(anony_names[i], visible=False)
 
                 with gr.Row():
                     for i in range(num_sides):
@@ -519,33 +566,77 @@ with block:
                 rightvote_btn = gr.Button(value="👉  B is better", interactive=False)
                 tie_btn = gr.Button(value="🤝  Tie", interactive=False)
                 bothbad_btn = gr.Button(value="👎  Both are bad", interactive=False)
+                vote_btn_list = [
+                    leftvote_btn,
+                    rightvote_btn,
+                    tie_btn,
+                    bothbad_btn
+                ]
+
+            with gr.Row():
+                energy_res = [ gr.Markdown(f"Model A energy consumption (J): ", visible=False),
+                               gr.Markdown("0", visible=False),
+                               gr.Markdown(f"Model B energy consumption (J): ", visible=False),
+                               gr.Markdown("0", visible=False)]
+
+            with gr.Row():
+                left_energy_vote_btn = gr.Button(value="👈  Model A more energy efficient", visible=False)
+                right_energy_vote_btn = gr.Button(value="👉 Model B more energy efficient", visible=False)
+                energy_vote_btn = [left_energy_vote_btn, right_energy_vote_btn]
 
             with gr.Row():
                 clear = gr.Button("Clear")
 
-            def add_prompt(user_message, history):
-                return "", history + [[user_message, None]]
+            def allow_vote():
+                return [enable_btn for _ in range(4)]
 
-            def create_get_response_func(model_name, history):
-                system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
-                response = send_controller(model_name, system_prompt + history[-1][0])
-                history[-1][1] = ""
-                print("Response: ", response)
-                for character in response:
-                    history[-1][1] += character
-                    # time.sleep(0.01)
-                    yield history
+            prompt_text.submit(add_prompt, [prompt_text] + chat_models, [prompt_text] + chat_models + masked_model_name, queue=True).then(
+                create_get_response_func, masked_model_name + chat_models, chat_models + energy_res
+            ).then(allow_vote, None, vote_btn_list)
 
-            for i in range(num_sides):
-                # TODO: add prompt; context
-                prompt_text.submit(add_prompt, [prompt_text, chat_models[i]], [prompt_text, chat_models[i]], queue=True).then(
-                    create_get_response_func, [model_selection[i], chat_models[i]], chat_models[i]
-                )
-                request_btn.click(add_prompt, [prompt_text, chat_models[i]], [prompt_text, chat_models[i]], queue=True).then(
-                    create_get_response_func, [model_selection[i], chat_models[i]], chat_models[i]
-                )
+            request_btn.click(add_prompt, [prompt_text] + chat_models, [prompt_text] + chat_models + masked_model_name, queue=True).then(
+                create_get_response_func, masked_model_name + chat_models, chat_models + energy_res
+            ).then(allow_vote, None, vote_btn_list)
 
-            clear.click(lambda: None, None, chat_models[i], queue=False)
+            def show_energy_voting():
+                # show vote buttons
+                return [gr.Button.update(visible=True) for _ in range(num_sides)] + [gr.Markdown.update(visible=True) for _ in range(4)]
+
+            def show_model_name():
+                return [gr.Markdown.update(visible=True) for _ in range(2)]
+
+            leftvote_btn.click(
+                leftvote_last_response, masked_model_name, vote_btn_list
+            ).then(show_energy_voting, [], energy_vote_btn + energy_res )
+
+            rightvote_btn.click(
+                rightvote_last_response, masked_model_name, vote_btn_list,
+            ).then(show_energy_voting, [], energy_vote_btn + energy_res )
+
+            tie_btn.click(
+                tievote_last_response, masked_model_name, vote_btn_list,
+            ).then(show_energy_voting, [], energy_vote_btn + energy_res )
+
+            bothbad_btn.click(
+                bothbad_vote_last_response, masked_model_name, vote_btn_list,
+            ).then(show_energy_voting, [], energy_vote_btn + energy_res )
+
+
+            left_energy_vote_btn.click(
+                left_energy_vote_last_response, masked_model_name, masked_model_name + energy_vote_btn,
+            )
+            right_energy_vote_btn.click(
+                right_energy_vote_last_response, masked_model_name, masked_model_name + energy_vote_btn,
+            )
+            def restart():
+                return [gr.Button.update(visible=False) for _ in range(2)] + [ gr.Markdown.update(visible=False) for _ in range(4)]
+
+            clear.click(lambda: None, None, chat_models[0], queue=False).then(
+                lambda: None, None, chat_models[1], queue=False).then(
+                lambda: None, None, masked_model_name[0], queue=False).then(
+                lambda: None, None, masked_model_name[1], queue=False).then(
+                restart, [], energy_vote_btn + energy_res, queue=False
+            )
 
         # Tab 3: About page.
         with gr.Tab("About"):

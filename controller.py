@@ -12,6 +12,8 @@ from collections import defaultdict
 import logging
 logger = logging.getLogger('Controller')
 from text_generation import Client
+import json
+
 
 class WorkerInfo:
     def __init__(self):
@@ -47,12 +49,12 @@ class Controller:
                 self.worker_info[model_name, ip_address, port] = WorkerInfo()
                 instance_id += 1
 
-    def receive_request(self,  model_name, prompt):
-        print(f"Received request for {model_name} with prompt {prompt}")
-        # random pick
+    def receive_request_stream_energy(self,  model_name, prompt):
+        if model_name not in self.model_dest:
+            return None
         worker_addr, worker_port = random.choice(list(self.model_dest[model_name]))
 
-        url = f'http://{worker_addr}:{worker_port}/generate'
+        url = f'http://{worker_addr}:{worker_port}/generate_stream'
         data = {
             'inputs': prompt,
             'parameters': {
@@ -60,12 +62,24 @@ class Controller:
             }
         }
         headers = {'Content-Type': 'application/json'}
-
         response = requests.post(url, json=data, headers=headers)
-        print(response.json()['generated_text'])
-        return response.json()['generated_text']
+        json_string = response.text.replace('data:', '')
+        json_strings = json_string.strip().split('\n')
+        for json_string in json_strings:
+            try:
+                data = json.loads(json_string)
+                # Access the specific fields from the parsed JSON object
+                token_text = data['token']['text']
+                token_energy = data['token']['energy']
+                yield token_text, token_energy
+            except json.JSONDecodeError:
+                print("Error parsing JSON:", json_string)
+
 
     def receive_request_stream(self, model_name, prompt):
+        # TODO: energy can be get from the python API
+        if model_name not in self.model_dest:
+            return None
         worker_addr, worker_port = random.choice(list(self.model_dest[model_name]))
         url = f'http://{worker_addr}:{worker_port}'
         client = Client(url)
@@ -73,8 +87,8 @@ class Controller:
         for response in client.generate_stream(prompt, max_new_tokens=args.max_len):
             if not response.token.special:
                 text += response.token.text
-                yield response.token.text
-        print(text)
+                print(response.token)
+                yield response.token.text, response.token.energy
 
     def get_models(self):
         return list(self.model_dest.keys())
@@ -96,7 +110,6 @@ class Controller:
                 self.deactivate_worker(worker_name)
 
     def deactivate_worker(self, worker_name: str):
-        self.worker_info[worker_name].last_heart_beat = -1
         if worker_name[0] in self.model_dest:
             self.model_dest[worker_name[0]].remove(worker_name[1:])
 
@@ -113,7 +126,7 @@ async def request(request: Request):
     data = await request.json()
     model_name = data["model_name"]
     prompt = data["prompt"]
-    return controller.receive_request_stream(model_name, prompt)
+    return controller.receive_request_stream_energy(model_name, prompt)
 
 @app.post("/get_models")
 async def get_models():
@@ -132,7 +145,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_len", type=int, default=20)
     parser.add_argument("--deploy_yml", type=str, default="deployment.yaml")
     parser.add_argument("--network_name", type=str, default="mynetwork")
-    parser.add_argument("--heart_beat_interval", type=int, default=60)
+    parser.add_argument("--heart_beat_interval", type=int, default=30)
     parser.add_argument(
         "--dispatch-method",
         type=str,

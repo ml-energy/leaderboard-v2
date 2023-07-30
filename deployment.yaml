@@ -6,14 +6,12 @@ models:
         docker_port: 8000
         device: '"device=0"'
         num_shard: 1
-        data_path: $HOME/data
-  - name: tiiuae/falcon-7b
+  - name: tiiuae/falcon-7b-instruct
     instances:
       - ip_address: worker1
         port: 8002
         docker_port: 8000
-        device: '"device=0"'
+        device: '"device=1"'
         num_shard: 1
-        data_path: $HOME/data
 
 

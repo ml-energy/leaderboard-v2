@@ -12,23 +12,19 @@ docker network create mynetwork
 ## Start workers
 Should read from deployment.yaml. Here we just start one worker manually.
 ```commandline
-model=bigscience/bloom-560m
-num_shard=1
-volume=$PWD/data 
-docker_port=8000
-port=8001
- 
-docker run  --name=worker0 --network=mynetwork --gpus 1 --shm-size 1g -p $port:$docker_port -v $volume:/data tgi:origin --model-id $model --num-shard $num_shard --port $docker_port 
+GPU_ID=0
+PORT=8001
+docker rm worker0
+docker run  --name=worker0  --network=mynetwork --gpus '"device='"$GPU_ID"'"' --shm-size 1g -p $PORT:8000 -v /data/leaderboard/tgi-data:/data -v /data/leaderboard/weights:/weights ml-energy/tgi:latest --model-id bigscience/bloom-560m --port 8000
 ```
 
 ```commandline
-model=tiiuae/falcon-7b
-num_shard=1
-volume=$PWD/data 
-docker_port=8000
-port=8002
- 
-docker run  --name=worker1 --network=mynetwork --gpus 1 --shm-size 1g -p $port:$docker_port -v $volume:/data tgi:origin --model-id $model --num-shard $num_shard --port $docker_port 
+
+
+GPU_ID=1
+PORT=8002
+docker rm worker1
+docker run  --name=worker1  --network=mynetwork --gpus '"device='"$GPU_ID"'"' --shm-size 1g -p $PORT:8000 -v /data/leaderboard/tgi-data:/data -v /data/leaderboard/weights:/weights ml-energy/tgi:latest --model-id tiiuae/falcon-7b-instruct  --port 8000
 ```
 
 More models is coming soon.
@@ -51,8 +47,5 @@ The controller will check the live workers every min.
 ## TODO
 - [ ] Logging
 - [ ] Conversation context
-
-
-
-
+- [ ] Anonymization 
 
