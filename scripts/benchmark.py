@@ -197,7 +197,7 @@ def generate_stream(
             if not any(partially_stopped):
                 # indicates which request in batch stopped
                 different_indices = np.where(stopped != old_stopped)[0]
-                stop_length = np.array([(i, len(output[i])) for i in different_indices])
+                stop_length = np.array([(j, i+1) for j in different_indices])
                 yield {
                     "text": output,
                     "stop_length": stop_length,
@@ -215,7 +215,7 @@ def generate_stream(
             spaces_between_special_tokens=False,
             clean_up_tokenization_spaces=True,
         )
-    stop_length = np.array([(i, len(output[i])) for i in false_indices])
+    stop_length = np.array([(i, max_new_tokens) for i in false_indices])
 
     yield {
         "text": output,
@@ -230,7 +230,7 @@ def generate_stream(
 
 def main(
     model_path: str,
-    input_file: str = "sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json",
+    input_file: str = "sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json",
     output_dir: str = "data",
     device_index: int = 0,
     task: Literal[tuple(SYSTEM_PROMPTS)] = "chat",  # type: ignore
@@ -245,7 +245,7 @@ def main(
     Args:
         model_path: Path to or Huggingface Hub Id of the model.
         input_file: Path to the input JSON file. Assumed to be our cleaned ShareGPT data.
-            (Default: "sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json")
+            (Default: "sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json")
         output_dir: Path to the output directory. (Default: "data")
         device_index: Index of the GPU to use for inference. (Default: 0)
         task: Type of task to perform inference on. (Default: "chat")
@@ -304,7 +304,12 @@ def main(
     conv_base = get_conversation_template(model_path)
 
     # Standardize the system prompt for every model.
-    conv_base.system = SYSTEM_PROMPTS[task]
+    if "llama-2" in model_path.lower():
+        conv_base.system = f"<s>[INST] <<SYS>>\n{SYSTEM_PROMPTS[task]}\n<</SYS>>\n\n"
+    elif "stablelm" in model_path.lower():
+        conv_base.system = f"""<|SYSTEM|># {SYSTEM_PROMPTS[task]}\n"""
+    else:
+        conv_base.system = SYSTEM_PROMPTS[task]
     conv_base.messages = []
     conv_base.offset = 0
 
@@ -407,7 +412,8 @@ def main(
         # Record numbers.
         output_text = output["text"]
         if not is_warmup:
-            response_length = int(sum(batch_token_len.values()))  # number of valid tokens
+            total_length = int(sum(batch_token_len.values()))  # number of valid tokens
+            response_length = float(total_length) / len(convs)
             latency = measurements.time
             throughput = response_length / latency
             energy = measurements.total_energy

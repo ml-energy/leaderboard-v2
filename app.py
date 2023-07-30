@@ -324,7 +324,7 @@ Time and energy are of course not the only things we care about -- so we also be
 including the ARC Challenge (reasoning), HellaSwag (common sense), and TruthfulQA (truthfulness).</p>
 
 <p style="font-size: 16px">For more detailed information, please take a look at the <b>About</b> tab.
-Every benchmark is limited in some sense -- Before you interpret the results, please take a look at the *Limitations* section there, too.</p>
+Every benchmark is limited in some sense -- Before you interpret the results, please take a look at the <b>Limitations</b> section there, too.</p>
 """
 
 controller_addr = 'http://controller:8000'
@@ -403,12 +403,12 @@ with block:
         gr.HTML("<h1><a href='https://ml.energy' class='text-logo'>ML.ENERGY</a> Leaderboard</h1>")
 
     with gr.Tabs():
-        # Tab 1: Leaderboard.
+        # Tab: Leaderboard.
         with gr.Tab("Leaderboard"):
             with gr.Box():
                 gr.HTML(intro_text)
 
-            # Block 1: Checkboxes to select benchmarking parameters.
+            # Block: Checkboxes to select benchmarking parameters.
             with gr.Row():
                 with gr.Box():
                     gr.Markdown("### Benchmark results to show")
@@ -417,7 +417,7 @@ with block:
                         # Specifying `value` makes everything checked by default.
                         checkboxes.append(gr.CheckboxGroup(choices=choices, value=choices[:1], label=key))
 
-            # Block 2: Leaderboard table.
+            # Block: Leaderboard table.
             with gr.Row():
                 dataframe = gr.Dataframe(type="pandas", elem_id="tab-leaderboard")
             # Make sure the models have clickable links.
@@ -426,7 +426,7 @@ with block:
             for checkbox in checkboxes:
                 checkbox.change(TableManager.set_filter_get_df, inputs=[tbm, *checkboxes], outputs=dataframe)
 
-            # Block 3: Allow users to add new columns.
+            # Block: Allow users to add new columns.
             with gr.Box():
                 gr.Markdown("### Add custom columns to the table")
                 with gr.Row():
@@ -470,7 +470,7 @@ with block:
                     outputs=[colname_input, formula_input, add_col_message],
                 )
 
-            # Block 4: Allow users to plot 2D and 3D scatter plots.
+            # Block: Allow users to plot 2D and 3D scatter plots.
             with gr.Box():
                 gr.Markdown("### Scatter plot (Hover over marker to show model name)")
                 with gr.Row():
@@ -519,7 +519,7 @@ with block:
                     outputs=[*axis_dropdowns, plot, plot_width_input, plot_height_input, plot_message],
                 )
 
-            # Block 5: Leaderboard date.
+            # Block: Leaderboard date.
             with gr.Row():
                 gr.HTML(f"<h3 style='color: gray'>Last updated: {current_date}</h3>")
 

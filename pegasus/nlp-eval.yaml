@@ -19,6 +19,7 @@
     - project-baize/baize-v2-7B
     - StabilityAI/stablelm-tuned-alpha-7b
     - togethercomputer/RedPajama-INCITE-7B-Chat
+    - RWKV/rwkv-raven-7b
 
 - command:
     - docker exec leaderboard{{ gpu }} python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{ model }},trust_remote_code=True,use_accelerate=True --tasks hellaswag --num_fewshot 10 --output_path /data/leaderboard/benchmark/nlp/{{ replace model "/" "--" }}/hellaswag.json
@@ -41,6 +42,7 @@
     - project-baize/baize-v2-7B
     - StabilityAI/stablelm-tuned-alpha-7b
     - togethercomputer/RedPajama-INCITE-7B-Chat
+    - RWKV/rwkv-raven-7b
 
 - command:
     - docker exec leaderboard{{ gpu }} python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-causal-experimental --model_args pretrained={{ model }},trust_remote_code=True,use_accelerate=True --tasks truthfulqa_mc --num_fewshot 0 --output_path /data/leaderboard/benchmark/nlp/{{ replace model "/" "--" }}/truthfulqa_mc.json
@@ -63,6 +65,7 @@
     - project-baize/baize-v2-7B
     - StabilityAI/stablelm-tuned-alpha-7b
     - togethercomputer/RedPajama-INCITE-7B-Chat
+    - RWKV/rwkv-raven-7b
 
 - command:
     - docker exec leaderboard{{ gpu }} python lm-evaluation-harness/main.py --device cuda --no_cache --model hf-seq2seq --model_args pretrained={{ model }},trust_remote_code=True,use_accelerate=True --tasks arc_challenge --num_fewshot 25 --output_path /data/leaderboard/benchmark/nlp/{{ replace model "/" "--" }}/arc_challenge.json

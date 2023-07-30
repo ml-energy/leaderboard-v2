@@ -16,12 +16,12 @@
     },
     "metaai/llama-7B": {
         "url": "https://github.com/facebookresearch/llama",
-        "nickname": "MetaAI/LLaMA-7B",
+        "nickname": "MetaAI/Llama-7B",
         "params": 7
     },
     "metaai/llama-13B": {
         "url": "https://github.com/facebookresearch/llama",
-        "nickname": "MetaAI/LLaMA-13B",
+        "nickname": "MetaAI/Llama-13B",
         "params": 13
     },
     "camel-ai/CAMEL-13B-Combined-Data": {
@@ -29,9 +29,9 @@
         "nickname": "Camel-AI/CAMEL-13B-Combined-Data",
         "params": 13
     },
-    "BlinkDL/RWKV-4-Raven-7B-v12-Eng98%-Other2%-20230521-ctx8192.pth": {
-        "url": "https://huggingface.co/BlinkDL/rwkv-4-raven",
-        "nickname": "BlinkDL/RWKV-4-Raven-7B",
+    "RWKV/rwkv-raven-7b": {
+        "url": "https://huggingface.co/RWKV/rwkv-raven-7b",
+        "nickname": "RWKV/rwkv-raven-7b",
         "params": 7
     },
     "databricks/dolly-v2-12b": {
@@ -98,5 +98,15 @@
         "url": "https://huggingface.co/togethercomputer/RedPajama-INCITE-7B-Chat",
         "nickname": "togethercomputer/RedPajama-INCITE-7B-Chat",
         "params": 7
+    },
+    "metaai/Llama-2-7b-chat-hf": {
+        "url": "https://huggingface.co/meta-llama/Llama-2-7b-chat-hf",
+        "nickname": "MetaAI/Llama-2-7B-chat",
+        "params": 7
+    },
+    "metaai/Llama-2-13b-chat-hf": {
+        "url": "https://huggingface.co/meta-llama/Llama-2-13b-chat-hf",
+        "nickname": "MetaAI/Llama-2-13B-chat",
+        "params": 13
     }
 }

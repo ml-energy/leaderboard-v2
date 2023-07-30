@@ -25,3 +25,8 @@ python extract_first.py --in-file sg_90k_part1_html_cleaned_lang.json --out-file
 ```
 python -m fastchat.data.sample --in sg_90k_part1_html_cleaned_lang_first.json --out sg_90k_part1_html_cleaned_lang_first_sampled.json --end 10000 --max-length 10000
 ```
+
+## Sorted data
+'''
+python sort.py --data-dir sg_90k_part1_html_cleaned_lang_first_sampled.json --out-file sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json
+'''

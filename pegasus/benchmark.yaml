@@ -3,7 +3,7 @@
 # {{ gpu }} is defined in `hosts.yaml`, and will be filled in when Pegasus
 # determines the specific node and gpu the generated job command will run on.
 - command:
-    - docker exec leaderboard{{ gpu }} python scripts/benchmark.py --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled.json --model-path {{ model }} --task {{ task }}
+    - docker exec leaderboard{{ gpu }} python scripts/benchmark.py --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json --model-path {{ model }} --task {{ task }}
   model:
     - /data/leaderboard/weights/metaai/llama-7B
     - /data/leaderboard/weights/metaai/llama-13B
