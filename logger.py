@@ -11,8 +11,8 @@ class AsyncLogHandler(logging.Handler):
     def emit(self, record):
         self.executor.submit(self.handler.emit, record)
 
-def setup_logger():
-    file_handler = logging.FileHandler('my_log_file.log')  # Send log messages to the file
+def setup_logger(file_name = 'my_log_file.log'):
+    file_handler = logging.FileHandler(file_name)  # Send log messages to the file
     # console_handler = logging.StreamHandler()  # Send log messages to the console
 
     file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
@@ -22,6 +22,4 @@ def setup_logger():
 
     logger = logging.getLogger()
     logger.addHandler(async_handler)
-    # logger.setLevel(logging.DEBUG)
-
     return logger

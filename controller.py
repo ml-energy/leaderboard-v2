@@ -1,5 +1,6 @@
 
 from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi.responses import StreamingResponse
 import uvicorn
 import argparse
 import requests
@@ -14,6 +15,9 @@ logger = logging.getLogger('Controller')
 from text_generation import Client
 import json
 
+from logger import setup_logger
+logger = setup_logger("Controller_instant.log")
+user_logger = setup_logger("User.log")
 
 class WorkerInfo:
     def __init__(self):
@@ -29,7 +33,9 @@ class Controller:
         self.worker_info = {}
         self.network_name = args.network_name
         self.deploy_workers(args.deploy_yml)
+        # TODO: add user state expiration
 
+        self.user_state = defaultdict(dict)
         self.heart_beat_thread = threading.Thread(
             target=self.heart_beat_controller,
         )
@@ -76,19 +82,30 @@ class Controller:
                 print("Error parsing JSON:", json_string)
 
 
-    def receive_request_stream(self, model_name, prompt):
-        # TODO: energy can be get from the python API
+    def receive_request_stream(self, model_name, prompt, user_id):
         if model_name not in self.model_dest:
             return None
         worker_addr, worker_port = random.choice(list(self.model_dest[model_name]))
+        if not worker_addr or not worker_port:
+            yield None
         url = f'http://{worker_addr}:{worker_port}'
         client = Client(url)
         text = ""
+        self.user_state[user_id]['prompt'].append(prompt)
+        model_id = self.user_state[user_id]['model'].index(model_name)
         for response in client.generate_stream(prompt, max_new_tokens=args.max_len):
             if not response.token.special:
                 text += response.token.text
                 print(response.token)
-                yield response.token.text, response.token.energy
+                self.user_state[user_id]['energy'][model_id] += response.token.energy
+                yield json.dumps(response.token.text).encode() + b"\0"
+
+        logger.info(f"User {user_id} request {prompt} from {model_name} "
+                    f"with energy {self.user_state[user_id]['energy'][model_id]}. "
+                    f"with response {text} ")
+        if user_id in self.user_state:
+            self.user_state[user_id]['response'][model_id].append(text)
+        # yield text
 
     def get_models(self):
         return list(self.model_dest.keys())
@@ -107,6 +124,7 @@ class Controller:
                         self.model_dest[model_name].add((ip_address, port))
                         print(f"Registered worker {model_name} at {ip_address}:{port}")
             except:
+                # TODO: restart worker
                 self.deactivate_worker(worker_name)
 
     def deactivate_worker(self, worker_name: str):
@@ -118,19 +136,53 @@ class Controller:
             self.check_health()
             time.sleep(args.heart_beat_interval)
 
+    # TODO: redis user server
+    def random_assign_models(self, user_id):
+        if user_id not in self.user_state:
+            self.user_state[user_id]['energy'] = [0, 0]
+            self.user_state[user_id]['response'] = [[], []]
+            self.user_state[user_id]['prompt'] = []
+            self.user_state[user_id]['model'] = random.sample(self.model_dest.keys(), min(2, len(self.model_dest.keys())))
+
+    def remove_user(self, user_id):
+        if user_id in self.user_state:
+            del self.user_state[user_id]
 
 app = FastAPI()
 
 @app.post("/request")
 async def request(request: Request):
+    # import asyncio
     data = await request.json()
-    model_name = data["model_name"]
     prompt = data["prompt"]
-    return controller.receive_request_stream_energy(model_name, prompt)
+    index = data["index"]
+    user_id = request.headers.get("X-User-ID")
+    controller.random_assign_models(user_id)
+    model_name = controller.user_state[user_id]['model'][index]
+
+    return StreamingResponse( controller.receive_request_stream(model_name, prompt, user_id))
+
 
 @app.post("/get_models")
 async def get_models():
     return controller.get_models()
+
+@app.post("/get_nlp_voting")
+async def get_nlp_voting(request: Request):
+    user_id = request.headers.get("X-User-ID")
+    data = await request.json()
+    nlp_voting = data["nlp_voting"]
+    logger.info(f"User {user_id} return nlp_voting {nlp_voting} between models {controller.user_state[user_id]['model']}")
+    controller.user_state[user_id]['nlp_voting'] = nlp_voting
+    return controller.user_state[user_id]['model'] + controller.user_state[user_id]['energy']
+
+@app.post("/get_energy_voting")
+async def get_energy_voting(request: Request):
+    user_id = request.headers.get("X-User-ID")
+    data = await request.json()
+    energy_voting = data["energy_voting"]
+    controller.user_state[user_id]['energy_voting'] = energy_voting
+    user_logger.info(controller.user_state[user_id])
 
 @app.post("/receive_heart_beat")
 async def receive_heart_beat(request: Request):
@@ -142,10 +194,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--max_len", type=int, default=20)
+    parser.add_argument("--max_len", type=int, default=100)
     parser.add_argument("--deploy_yml", type=str, default="deployment.yaml")
     parser.add_argument("--network_name", type=str, default="mynetwork")
-    parser.add_argument("--heart_beat_interval", type=int, default=30)
+    parser.add_argument("--heart_beat_interval", type=int, default=45)
     parser.add_argument(
         "--dispatch-method",
         type=str,

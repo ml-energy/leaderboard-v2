@@ -45,7 +45,4 @@ python app.py --share
 The controller will check the live workers every min.
 
 ## TODO
-- [ ] Logging
-- [ ] Conversation context
-- [ ] Anonymization 
-
+- [ ] TGI Logging
