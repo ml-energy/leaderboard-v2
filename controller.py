@@ -55,33 +55,6 @@ class Controller:
                 self.worker_info[model_name, ip_address, port] = WorkerInfo()
                 instance_id += 1
 
-    def receive_request_stream_energy(self,  model_name, prompt):
-        if model_name not in self.model_dest:
-            return None
-        worker_addr, worker_port = random.choice(list(self.model_dest[model_name]))
-
-        url = f'http://{worker_addr}:{worker_port}/generate_stream'
-        data = {
-            'inputs': prompt,
-            'parameters': {
-                'max_new_tokens': self.args.max_len,
-            }
-        }
-        headers = {'Content-Type': 'application/json'}
-        response = requests.post(url, json=data, headers=headers)
-        json_string = response.text.replace('data:', '')
-        json_strings = json_string.strip().split('\n')
-        for json_string in json_strings:
-            try:
-                data = json.loads(json_string)
-                # Access the specific fields from the parsed JSON object
-                token_text = data['token']['text']
-                token_energy = data['token']['energy']
-                yield token_text, token_energy
-            except json.JSONDecodeError:
-                print("Error parsing JSON:", json_string)
-
-
     def receive_request_stream(self, model_name, prompt, user_id):
         if model_name not in self.model_dest:
             return None
@@ -139,10 +112,10 @@ class Controller:
     # TODO: redis user server
     def random_assign_models(self, user_id):
         if user_id not in self.user_state:
-            self.user_state[user_id]['energy'] = [0, 0]
             self.user_state[user_id]['response'] = [[], []]
             self.user_state[user_id]['prompt'] = []
             self.user_state[user_id]['model'] = random.sample(self.model_dest.keys(), min(2, len(self.model_dest.keys())))
+        self.user_state[user_id]['energy'] = [0, 0]
 
     def remove_user(self, user_id):
         if user_id in self.user_state:
@@ -161,7 +134,6 @@ async def request(request: Request):
     model_name = controller.user_state[user_id]['model'][index]
 
     return StreamingResponse( controller.receive_request_stream(model_name, prompt, user_id))
-
 
 @app.post("/get_models")
 async def get_models():

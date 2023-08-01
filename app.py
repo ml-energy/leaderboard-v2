@@ -388,7 +388,7 @@ def create_get_response_b(history):
 
 def save_energy(energy_a, energy_b):
     energy_save = round((1 - energy_a / energy_b) * 100, 2)
-    energy_res = f"## The response you chose <font color='green'>save {energy_save}% less energy!</font>"
+    energy_res = f"## The response you chose <font color='green'>save {energy_save}% energy!</font>"
     return  energy_res
 
 def cost_energy(energy_a, energy_b):
@@ -409,7 +409,7 @@ def leftvote_last_response():
     else:
         energy_res = cost_energy(energy_a, energy_b)
         return disable_btn, disable_btn, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
-                gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True), gr.Button.update(visible=True)
+                gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True)
 
 def rightvote_last_response():
     model_name_a, model_name_b, energy_a, energy_b = return_nlp_voting(1)
@@ -422,16 +422,16 @@ def rightvote_last_response():
     else:
         energy_res = cost_energy(energy_b, energy_a)
         return disable_btn, disable_btn, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
-                gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True), gr.Button.update(visible=True)
+                gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True)
 
 
 def left_energy_vote_last_response():
     return_energy_voting(0)
-    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)]
+    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)] + [disable_btn, disable_btn]
 
 def right_energy_vote_last_response():
     return_energy_voting(1)
-    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)]
+    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)]  + [disable_btn, disable_btn]
 
 block = gr.Blocks(css=css)
 with block:
@@ -645,10 +645,10 @@ with block:
             )
 
             left_energy_vote_btn.click(
-                left_energy_vote_last_response, [], masked_model_name + energy_vote_btn,
+                left_energy_vote_last_response, [], masked_model_name + energy_vote_btn + vote_btn_list,
             )
             right_energy_vote_btn.click(
-                right_energy_vote_last_response, [], masked_model_name + energy_vote_btn,
+                right_energy_vote_last_response, [], masked_model_name + energy_vote_btn + vote_btn_list,
             )
 
             def restart():

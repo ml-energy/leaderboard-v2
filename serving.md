@@ -45,4 +45,6 @@ python app.py --share
 The controller will check the live workers every min.
 
 ## TODO
-- [ ] TGI Logging
+- [ ] Restrict to single round
+- [ ] Clean up user info
+- [ ] Add readme / terms of use
