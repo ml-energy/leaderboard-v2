@@ -431,7 +431,7 @@ def left_energy_vote_last_response():
 
 def right_energy_vote_last_response():
     return_energy_voting(1)
-    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)]  + [disable_btn, disable_btn]
+    return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn for _ in range(2)] + [disable_btn, disable_btn]
 
 block = gr.Blocks(css=css)
 with block:
@@ -568,8 +568,7 @@ with block:
 
         # Tab 2: Colosseum.
         with gr.TabItem("Colosseum⚔️️"):
-            # TODO: add readme
-            # gr.Markdown(open("Colosseum.md").read())
+            gr.Markdown(open("Colosseum.md").read())
             with gr.Row():
                 with gr.Column(scale=20):
                     prompt_text = gr.Textbox(

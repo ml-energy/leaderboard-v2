@@ -46,5 +46,5 @@ The controller will check the live workers every min.
 
 ## TODO
 - [ ] Restrict to single round
-- [ ] Clean up user info
-- [ ] Add readme / terms of use
+- [x] Clean up user info
+- [x] Add readme / terms of use

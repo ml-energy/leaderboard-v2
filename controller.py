@@ -19,6 +19,42 @@ from logger import setup_logger
 logger = setup_logger("Controller_instant.log")
 user_logger = setup_logger("User.log")
 
+import heapq
+import time
+
+class ExpiringUserDict:
+    def __init__(self):
+        self.user_dict = defaultdict(dict)
+        self.user_heap = []
+
+    def __getitem__(self, user_id):
+        # begin counting timeout from the first access
+        if user_id not in self.user_dict:
+            heapq.heappush(self.user_heap, (time.time(), user_id))
+        return self.user_dict[user_id]
+
+    def __setitem__(self, user_id, value):
+        if user_id not in self.user_dict:
+            heapq.heappush(self.user_heap, (time.time(), user_id))
+        self.user_dict[user_id] = value
+
+    def __delitem__(self, user_id):
+        del self.user_dict[user_id]
+
+    def __contains__(self, user_id):
+        return user_id in self.user_dict
+
+    def __len__(self):
+        return len(self.user_dict)
+
+    def cleanup(self, expiration_time):
+        threshold = time.time() - expiration_time
+        while self.user_heap and self.user_heap[0][0] < threshold:
+            _, user_id = heapq.heappop(self.user_heap)
+            print(f"User {user_id} is deleted")
+            del self.user_dict[user_id]
+
+
 class WorkerInfo:
     def __init__(self):
         self.last_heart_beat = -1
@@ -32,10 +68,11 @@ class Controller:
         self.args = args
         self.worker_info = {}
         self.network_name = args.network_name
+        self.max_user_state = args.max_user_state
+        self.user_state_expiration_time = args.user_state_expiration_time
         self.deploy_workers(args.deploy_yml)
-        # TODO: add user state expiration
 
-        self.user_state = defaultdict(dict)
+        self.user_state = ExpiringUserDict()
         self.heart_beat_thread = threading.Thread(
             target=self.heart_beat_controller,
         )
@@ -69,7 +106,6 @@ class Controller:
         for response in client.generate_stream(prompt, max_new_tokens=args.max_len):
             if not response.token.special:
                 text += response.token.text
-                print(response.token)
                 self.user_state[user_id]['energy'][model_id] += response.token.energy
                 yield json.dumps(response.token.text).encode() + b"\0"
 
@@ -107,6 +143,9 @@ class Controller:
     def heart_beat_controller(self):
         while True:
             self.check_health()
+            time.sleep(args.heart_beat_interval)
+            if len(self.user_state) > self.max_user_state:
+                self.user_state.cleanup(self.user_state_expiration_time)
             time.sleep(args.heart_beat_interval)
 
     # TODO: redis user server
@@ -146,7 +185,10 @@ async def get_nlp_voting(request: Request):
     nlp_voting = data["nlp_voting"]
     logger.info(f"User {user_id} return nlp_voting {nlp_voting} between models {controller.user_state[user_id]['model']}")
     controller.user_state[user_id]['nlp_voting'] = nlp_voting
-    return controller.user_state[user_id]['model'] + controller.user_state[user_id]['energy']
+    if user_id in controller.user_state:
+        return controller.user_state[user_id]['model'] + controller.user_state[user_id]['energy']
+    else:
+        return 'TIMEOUT' + 0
 
 @app.post("/get_energy_voting")
 async def get_energy_voting(request: Request):
@@ -169,7 +211,10 @@ if __name__ == "__main__":
     parser.add_argument("--max_len", type=int, default=100)
     parser.add_argument("--deploy_yml", type=str, default="deployment.yaml")
     parser.add_argument("--network_name", type=str, default="mynetwork")
-    parser.add_argument("--heart_beat_interval", type=int, default=45)
+    parser.add_argument("--heart_beat_interval", type=int, default=60)
+    parser.add_argument("--max_user_state", type=int, default=10000)
+    parser.add_argument("--user_state_expiration_time", type=int, default=300)
+
     parser.add_argument(
         "--dispatch-method",
         type=str,
