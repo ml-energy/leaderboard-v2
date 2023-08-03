@@ -59,18 +59,16 @@ class WorkerInfo:
     def __init__(self):
         self.last_heart_beat = -1
 
-    def check_heartbeat(self, time):
-        self.last_heart_beat = time
 
 class Controller:
     def __init__(self, args):
         self.model_dest = defaultdict(set)
         self.args = args
-        self.worker_info = {}
+        # self.worker_info = {}
         self.network_name = args.network_name
         self.max_user_state = args.max_user_state
         self.user_state_expiration_time = args.user_state_expiration_time
-        self.deploy_workers(args.deploy_yml)
+        # self.deploy_workers(args.deploy_yml)
 
         self.user_state = ExpiringUserDict()
         self.heart_beat_thread = threading.Thread(
@@ -83,14 +81,16 @@ class Controller:
         with open(deploy_yml, "r") as file:
             data = yaml.load(file, Loader=yaml.FullLoader)
 
+        worker_info = {}
         instance_id = 0
         for model in data['models']:
             model_name = model['name']
             for instance in model['instances']:
                 ip_address = instance['ip_address']
                 port = instance['docker_port']
-                self.worker_info[model_name, ip_address, port] = WorkerInfo()
+                worker_info[model_name, ip_address, port] = WorkerInfo()
                 instance_id += 1
+        return worker_info
 
     def receive_request_stream(self, model_name, prompt, user_id):
         if model_name not in self.model_dest:
@@ -120,7 +120,8 @@ class Controller:
         return list(self.model_dest.keys())
 
     def check_health(self):
-        for worker_name, w_info in self.worker_info.items():
+        worker_info = self.deploy_workers(self.args.deploy_yml)
+        for worker_name, w_info in worker_info.items():
             model_name, ip_address, port = worker_name
             url = f'http://{ip_address}:{port}/health'
             try:
@@ -128,7 +129,6 @@ class Controller:
                 if response.status_code != 200:
                     self.deactivate_worker(worker_name)
                 else:
-                    w_info.check_heartbeat(time.time())
                     if worker_name[0] not in self.model_dest[model_name]:
                         self.model_dest[model_name].add((ip_address, port))
                         print(f"Registered worker {model_name} at {ip_address}:{port}")
@@ -166,7 +166,8 @@ app = FastAPI()
 async def request(request: Request):
     # import asyncio
     data = await request.json()
-    prompt = data["prompt"]
+    system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
+    prompt = system_prompt + data["prompt"]
     index = data["index"]
     user_id = request.headers.get("X-User-ID")
     controller.random_assign_models(user_id)

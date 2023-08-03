@@ -356,10 +356,9 @@ def add_prompt(user_message, history):
     return "", history + [[user_message, ""]]
 
 def request_response(history, index):
-    system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
     url = f"{controller_addr}/request"
     data = {
-        "prompt": system_prompt + history[-1][0],
+        "prompt": history[-1][0], # system_prompt is on the controller side
         "index": index
     }
     response = requests.post(
@@ -613,26 +612,33 @@ with block:
             with gr.Row():
                 clear = gr.Button("Clear")
 
-            def allow_vote():
+            def enable_interact():
                 return [enable_btn for _ in range(2)]
+
+            def disable_interact():
+                return [disable_btn for _ in range(2)]
 
 
             prompt_text.submit(add_prompt, [prompt_text, chat_models[0]], [prompt_text , chat_models[0]], queue=True).then(
                             create_get_response_a, chat_models[0], chat_models[0] ).then(
-                            allow_vote, None, vote_btn_list
+                            enable_interact, None, vote_btn_list).then(
+                            disable_interact, None, [prompt_text, request_btn], queue=False
             )
             prompt_text.submit(add_prompt, [prompt_text, chat_models[1]], [prompt_text , chat_models[1]], queue=True).then(
                             create_get_response_b, chat_models[1], chat_models[1]).then(
-                            allow_vote, None, vote_btn_list
+                            enable_interact, None, vote_btn_list).then(
+                            disable_interact, None, [prompt_text, request_btn], queue=False
             )
 
             request_btn.click(add_prompt,[prompt_text, chat_models[0]], [prompt_text , chat_models[0]], queue=True).then(
                             create_get_response_a, chat_models[0], chat_models[0] ).then(
-                            allow_vote, None, vote_btn_list
+                            enable_interact, None, vote_btn_list).then(
+                            disable_interact, None, [prompt_text, request_btn], queue=False
             )
             request_btn.click(add_prompt, [prompt_text, chat_models[1]], [prompt_text , chat_models[1]], queue=True).then(
                             create_get_response_b, chat_models[1], chat_models[1]).then(
-                            allow_vote, None, vote_btn_list
+                            enable_interact, None, vote_btn_list).then(
+                            disable_interact, None, [prompt_text, request_btn], queue=False
             )
 
 
@@ -657,7 +663,8 @@ with block:
                         lambda: None, None, chat_models[1], queue=False).then(
                         lambda: None, None, masked_model_name[0], queue=False).then(
                         lambda: None, None, masked_model_name[1], queue=False).then(
-                        restart, [], energy_vote_btn + [energy_res], queue=False
+                        restart, [], energy_vote_btn + [energy_res], queue=False).then(
+                        enable_interact, None, [prompt_text, request_btn], queue=False
             )
             # TODO: need to notify the controller?
 

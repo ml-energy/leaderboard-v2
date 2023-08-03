@@ -8,9 +8,12 @@
 docker network create mynetwork
 ```
 
+## Install our TGI (text generation inference) fork
 
 ## Start workers
-Should read from deployment.yaml. Here we just start one worker manually.
+Should read from deployment.yaml. Here we just start one worker manually. 
+Add `-d` to detach container. 
+
 ```commandline
 GPU_ID=0
 PORT=8001
@@ -19,8 +22,6 @@ docker run  --name=worker0  --network=mynetwork --gpus '"device='"$GPU_ID"'"' --
 ```
 
 ```commandline
-
-
 GPU_ID=1
 PORT=8002
 docker rm worker1
@@ -28,7 +29,6 @@ docker run  --name=worker1  --network=mynetwork --gpus '"device='"$GPU_ID"'"' --
 ```
 
 More models is coming soon.
-
 
 ## Start controller and web server
 ```commandline
@@ -43,8 +43,4 @@ python app.py --share
 ```
 
 The controller will check the live workers every min.
-
-## TODO
-- [ ] Restrict to single round
-- [x] Clean up user info
-- [x] Add readme / terms of use
+ 

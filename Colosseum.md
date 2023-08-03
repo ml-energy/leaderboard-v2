@@ -1,10 +1,10 @@
 ### Rules of Colosseum
-- Participants will engage in a conversation with two anonymous language models.
+- Participants will engage in a one-round conversation with two anonymous language models.
 - Participants will vote for which model give better response.
 - Participants will then assess and decide whether the energy consumed by the chosen model was justified based on its performance.
-- The energy measurement results pertain solely to the most recent round of conversation.
+- The energy consumption is for the single-round model inference measured by [Zeus](https://ml.energy/zeus).
 - The identities of the two models will only be revealed after the participant's second vote.
-- Click “Clear” to start a new round.
+- Click “Clear” to start over.
 
 
 ### Term of use
