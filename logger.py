@@ -16,10 +16,10 @@ def setup_logger(file_name = 'my_log_file.log'):
     # console_handler = logging.StreamHandler()  # Send log messages to the console
 
     file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-
     async_handler = AsyncLogHandler(file_handler)
-    async_handler.setLevel(logging.DEBUG)
+    async_handler.setLevel(logging.INFO)
 
     logger = logging.getLogger()
     logger.addHandler(async_handler)
+    logger.setLevel(logging.INFO)
     return logger

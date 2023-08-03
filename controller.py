@@ -64,11 +64,9 @@ class Controller:
     def __init__(self, args):
         self.model_dest = defaultdict(set)
         self.args = args
-        # self.worker_info = {}
         self.network_name = args.network_name
         self.max_user_state = args.max_user_state
         self.user_state_expiration_time = args.user_state_expiration_time
-        # self.deploy_workers(args.deploy_yml)
 
         self.user_state = ExpiringUserDict()
         self.heart_beat_thread = threading.Thread(
@@ -101,7 +99,7 @@ class Controller:
         url = f'http://{worker_addr}:{worker_port}'
         client = Client(url)
         text = ""
-        self.user_state[user_id]['prompt'].append(prompt)
+        self.user_state[user_id]['prompt'] = prompt
         model_id = self.user_state[user_id]['model'].index(model_name)
         for response in client.generate_stream(prompt, max_new_tokens=args.max_len):
             if not response.token.special:
@@ -113,7 +111,7 @@ class Controller:
                     f"with energy {self.user_state[user_id]['energy'][model_id]}. "
                     f"with response {text} ")
         if user_id in self.user_state:
-            self.user_state[user_id]['response'][model_id].append(text)
+            self.user_state[user_id]['response'][model_id] = text
         # yield text
 
     def get_models(self):
@@ -133,7 +131,7 @@ class Controller:
                         self.model_dest[model_name].add((ip_address, port))
                         print(f"Registered worker {model_name} at {ip_address}:{port}")
             except:
-                # TODO: restart worker
+                # TODO: restart worker automatically
                 self.deactivate_worker(worker_name)
 
     def deactivate_worker(self, worker_name: str):
@@ -148,13 +146,15 @@ class Controller:
                 self.user_state.cleanup(self.user_state_expiration_time)
             time.sleep(args.heart_beat_interval)
 
-    # TODO: redis user server
+    # redis user server?
     def random_assign_models(self, user_id):
-        if user_id not in self.user_state:
-            self.user_state[user_id]['response'] = [[], []]
-            self.user_state[user_id]['prompt'] = []
-            self.user_state[user_id]['model'] = random.sample(self.model_dest.keys(), min(2, len(self.model_dest.keys())))
+        if user_id not in self.user_state or self.user_state[user_id]['model'] is None:
+            self.user_state[user_id]['model'] = random.sample(list(self.model_dest.keys()), min(2, len(self.model_dest.keys())))
+        self.user_state[user_id]['response'] = ["", ""]
+        self.user_state[user_id]['prompt'] = ""
         self.user_state[user_id]['energy'] = [0, 0]
+        self.user_state[user_id]['nlp_voting'] = -1
+        self.user_state[user_id]['energy_voting'] = -1
 
     def remove_user(self, user_id):
         if user_id in self.user_state:
@@ -164,7 +164,6 @@ app = FastAPI()
 
 @app.post("/request")
 async def request(request: Request):
-    # import asyncio
     data = await request.json()
     system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
     prompt = system_prompt + data["prompt"]
@@ -187,7 +186,9 @@ async def get_nlp_voting(request: Request):
     logger.info(f"User {user_id} return nlp_voting {nlp_voting} between models {controller.user_state[user_id]['model']}")
     controller.user_state[user_id]['nlp_voting'] = nlp_voting
     if user_id in controller.user_state:
-        return controller.user_state[user_id]['model'] + controller.user_state[user_id]['energy']
+        model_names = controller.user_state[user_id]['model']
+        controller.user_state[user_id]['model'] = None
+        return model_names + controller.user_state[user_id]['energy']
     else:
         return 'TIMEOUT' + 0
 
@@ -196,8 +197,12 @@ async def get_energy_voting(request: Request):
     user_id = request.headers.get("X-User-ID")
     data = await request.json()
     energy_voting = data["energy_voting"]
-    controller.user_state[user_id]['energy_voting'] = energy_voting
-    user_logger.info(controller.user_state[user_id])
+    if user_id in controller.user_state:
+        controller.user_state[user_id]['energy_voting'] = energy_voting
+        user_logger.info(controller.user_state[user_id])
+        controller.remove_user(user_id)
+    else:
+        logger.info(f"User {user_id} expired energy voting {energy_voting}")
 
 @app.post("/receive_heart_beat")
 async def receive_heart_beat(request: Request):
@@ -212,9 +217,9 @@ if __name__ == "__main__":
     parser.add_argument("--max_len", type=int, default=100)
     parser.add_argument("--deploy_yml", type=str, default="deployment.yaml")
     parser.add_argument("--network_name", type=str, default="mynetwork")
-    parser.add_argument("--heart_beat_interval", type=int, default=60)
+    parser.add_argument("--heart_beat_interval", type=int, default=300)
     parser.add_argument("--max_user_state", type=int, default=10000)
-    parser.add_argument("--user_state_expiration_time", type=int, default=300)
+    parser.add_argument("--user_state_expiration_time", type=int, default=600)
 
     parser.add_argument(
         "--dispatch-method",
