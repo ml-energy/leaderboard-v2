@@ -1,58 +1,79 @@
-
-from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import StreamingResponse
-import uvicorn
-import argparse
-import requests
-import random
-import threading
+import enum
+import json
 import time
 import yaml
-
+import heapq
+import random
+import argparse
+import requests
+import threading
 from collections import defaultdict
-import logging
-logger = logging.getLogger('Controller')
-from text_generation import Client
-import json
 
-from logger import setup_logger
-logger = setup_logger("Controller_instant.log")
+import uvicorn
+from text_generation import Client
+from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi.responses import StreamingResponse
+
+from spitfight.common import (
+    COLOSSEUM_PROMPT_ROUTE,
+    COLOSSEUM_RESP_VOTE_ROUTE,
+    COLOSSEUM_ENERGY_VOTE_ROUTE
+)
+from spitfight.log import setup_logger
+
+controller_logger = setup_logger("Controller_instant.log")
 user_logger = setup_logger("User.log")
 
-import heapq
-import time
 
-class ExpiringUserDict:
-    def __init__(self):
-        self.user_dict = defaultdict(dict)
-        self.user_heap = []
+class State(enum.Enum):
+    """State of the Colosseum."""
 
-    def __getitem__(self, user_id):
+    WAITING_PROMPT = "waiting for the user prompt"
+    WAITING_RESPONSE_VOTE = "waiting for the user to vote for model responses"
+    WAITING_ENERGY_VOTE = "waiting for the user to vote for model energy"
+
+class BoundedExpiringDict:
+    def __init__(self, expiration_time: int):
+        self.data_dict = defaultdict(dict)
+        self.timestamp_heap = []
+        self.timeout = expiration_time
+
+        # Without this, the controller is vulnerable to "user flood attacks,"
+        # where someone can create a bunch of users by polling /request before
+        # self.timeout expires and blow up memory.
+        self.max_size = 10000
+
+    def __getitem__(self, key):
         # begin counting timeout from the first access
-        if user_id not in self.user_dict:
-            heapq.heappush(self.user_heap, (time.time(), user_id))
-        return self.user_dict[user_id]
+        if key not in self.data_dict:
+            heapq.heappush(self.timestamp_heap, (time.time(), key))
+        return self.data_dict[key]
 
-    def __setitem__(self, user_id, value):
-        if user_id not in self.user_dict:
-            heapq.heappush(self.user_heap, (time.time(), user_id))
-        self.user_dict[user_id] = value
+    def __setitem__(self, key, value):
+        if len(self.data_dict) >= self.max_size:
+            self.cleanup()
+
+        if key not in self.data_dict:
+            heapq.heappush(self.timestamp_heap, (time.time(), key))
+        self.data_dict[key] = value
 
     def __delitem__(self, user_id):
-        del self.user_dict[user_id]
+        del self.data_dict[user_id]
 
     def __contains__(self, user_id):
-        return user_id in self.user_dict
+        return user_id in self.data_dict
 
     def __len__(self):
-        return len(self.user_dict)
+        return len(self.data_dict)
 
-    def cleanup(self, expiration_time):
-        threshold = time.time() - expiration_time
-        while self.user_heap and self.user_heap[0][0] < threshold:
-            _, user_id = heapq.heappop(self.user_heap)
-            print(f"User {user_id} is deleted")
-            del self.user_dict[user_id]
+    def cleanup(self):
+        threshold = time.time() - self.timeout
+        # After the while loop, the dictionary will be smaller than max_size
+        # and all users will have been accessed within the timeout.
+        while (self.timestamp_heap and self.timestamp_heap[0][0] < threshold) or len(self.data_dict) > self.max_size:
+            _, user_id = heapq.heappop(self.timestamp_heap)
+            del self.data_dict[user_id]
+            controller_logger.debug("User %s evicted", user_id)
 
 
 class WorkerInfo:
@@ -66,9 +87,8 @@ class Controller:
         self.args = args
         self.network_name = args.network_name
         self.max_user_state = args.max_user_state
-        self.user_state_expiration_time = args.user_state_expiration_time
 
-        self.user_state = ExpiringUserDict()
+        self.user_state = BoundedExpiringDict(args.user_state_expiration_time)
         self.heart_beat_thread = threading.Thread(
             target=self.heart_beat_controller,
         )
@@ -107,15 +127,15 @@ class Controller:
                 self.user_state[user_id]['energy'][model_id] += response.token.energy
                 yield json.dumps(response.token.text).encode() + b"\0"
 
-        logger.info(f"User {user_id} request {prompt} from {model_name} "
+        controller_logger.info(f"User {user_id} request {prompt} from {model_name} "
                     f"with energy {self.user_state[user_id]['energy'][model_id]}. "
                     f"with response {text} ")
         if user_id in self.user_state:
             self.user_state[user_id]['response'][model_id] = text
         # yield text
 
-    def get_models(self):
-        return list(self.model_dest.keys())
+    # def get_models(self):
+    #     return list(self.model_dest.keys())
 
     def check_health(self):
         worker_info = self.deploy_workers(self.args.deploy_yml)
@@ -162,7 +182,7 @@ class Controller:
 
 app = FastAPI()
 
-@app.post("/request")
+@app.post(COLOSSEUM_PROMPT_ROUTE)
 async def request(request: Request):
     data = await request.json()
     system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
@@ -172,18 +192,18 @@ async def request(request: Request):
     controller.random_assign_models(user_id)
     model_name = controller.user_state[user_id]['model'][index]
 
-    return StreamingResponse( controller.receive_request_stream(model_name, prompt, user_id))
+    return StreamingResponse(controller.receive_request_stream(model_name, prompt, user_id))
 
-@app.post("/get_models")
-async def get_models():
-    return controller.get_models()
+# @app.post("/get_models")
+# async def get_models():
+#     return controller.get_models()
 
-@app.post("/get_nlp_voting")
+@app.post(COLOSSEUM_RESP_VOTE_ROUTE)
 async def get_nlp_voting(request: Request):
     user_id = request.headers.get("X-User-ID")
     data = await request.json()
     nlp_voting = data["nlp_voting"]
-    logger.info(f"User {user_id} return nlp_voting {nlp_voting} between models {controller.user_state[user_id]['model']}")
+    controller_logger.info(f"User {user_id} return nlp_voting {nlp_voting} between models {controller.user_state[user_id]['model']}")
     controller.user_state[user_id]['nlp_voting'] = nlp_voting
     if user_id in controller.user_state:
         model_names = controller.user_state[user_id]['model']
@@ -192,7 +212,7 @@ async def get_nlp_voting(request: Request):
     else:
         return 'TIMEOUT' + 0
 
-@app.post("/get_energy_voting")
+@app.post(COLOSSEUM_ENERGY_VOTE_ROUTE)
 async def get_energy_voting(request: Request):
     user_id = request.headers.get("X-User-ID")
     data = await request.json()
@@ -202,13 +222,8 @@ async def get_energy_voting(request: Request):
         user_logger.info(controller.user_state[user_id])
         controller.remove_user(user_id)
     else:
-        logger.info(f"User {user_id} expired energy voting {energy_voting}")
+        controller_logger.info(f"User {user_id} expired energy voting {energy_voting}")
 
-@app.post("/receive_heart_beat")
-async def receive_heart_beat(request: Request):
-    data = await request.json()
-    exist = controller.receive_heart_beat(data["model_name"], data["ip_address"], data["port"], data["queue_length"])
-    return {"exist": exist}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -220,7 +235,6 @@ if __name__ == "__main__":
     parser.add_argument("--heart_beat_interval", type=int, default=300)
     parser.add_argument("--max_user_state", type=int, default=10000)
     parser.add_argument("--user_state_expiration_time", type=int, default=600)
-
     parser.add_argument(
         "--dispatch-method",
         type=str,
@@ -231,5 +245,3 @@ if __name__ == "__main__":
 
     controller = Controller(args)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
-
-

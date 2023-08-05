@@ -7,3 +7,7 @@
 # Editor
 pyrightconfig.json
 .idea
+
+# Python
+*.egg-info
+**/__pycache__

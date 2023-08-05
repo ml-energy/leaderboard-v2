@@ -113,7 +113,7 @@ By doing this, we can provide numbers for reasonable comparison without being ti
 
 This leaderboard is a research preview intended for non-commercial use only.
 Model weights were taken as is from the Hugging Face Hub if available and are subject to their licenses.
-The use of LLaMA weights are subject to their [license](https://github.com/facebookresearch/llama/blob/main/MODEL_CARD.md).
+The use of Llama weights are subject to their [license](https://github.com/facebookresearch/llama/blob/main/LICENSE).
 Please direct inquiries/reports of potential violation to Jae-Won Chung.
 
 ## Acknowledgements
