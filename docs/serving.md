@@ -1,12 +1,22 @@
-# Instructions to set up the serving system  
+# Deploying the serving system
 
-## Install
+## Backend
 
+Set up Docker Swarm.
 
-## Setup container network
+```sh
+docker swarm init
+docker swarm join
 ```
-docker network create mynetwork
+
+Create a custom swarm overlay network.
+
+```sh
+docker network create --attachable -d overlay leaderboard
 ```
+
+Spawn the workers with `deployment/tgi-container.sh`
+
 
 ## Install our TGI (text generation inference) fork
 
