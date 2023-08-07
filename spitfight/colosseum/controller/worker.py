@@ -19,7 +19,6 @@ class Worker(BaseModel):
     status: Literal["up", "down"]
 
     class Config:
-        arbitrary_types_allowed = True
         keep_untouched = (cached_property,)
 
     @cached_property

@@ -3,9 +3,11 @@ from __future__ import annotations
 import random
 import asyncio
 from uuid import UUID
+from datetime import datetime
 from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
-from pydantic import BaseModel, UUID4
+from pytz import timezone
+from pydantic import BaseModel, UUID4, Field
 
 from spitfight.log import setup_logger
 from spitfight.utils import BoundedExpiringDict
@@ -31,6 +33,10 @@ UserStage = Literal[
     "voted_energy",
 ]
 
+def now() -> datetime:
+    return datetime.now(tz=timezone("US/Eastern"))
+
+
 class RequestState(BaseModel):
     """Models the state of a Colosseum play.
 
@@ -44,6 +50,8 @@ class RequestState(BaseModel):
     response_victory_index: Optional[Literal[0, 1]] = None
     energy_victory_index: Optional[Literal[0, 1]] = None
 
+    # The time when the user's stage changed.
+    _timestamp: datetime = Field(default_factory=now)
     # The user's current stage.
     _user_stage: UserStage = "prompted"
     # When the the user is not going through the aforementioned stages,
@@ -51,16 +59,21 @@ class RequestState(BaseModel):
     _abnormal_stage_change: list[tuple[UserStage, UserStage]] = []
 
     def set_response_and_energy(self, model_index: Literal[0, 1], response: str, energy_consumption: float) -> None:
+        self._timestamp = now()
         self.energy_consumptions[model_index] = energy_consumption
         self.responses[model_index] = response
 
     def set_response_vote(self, victory_index: Literal[0, 1]) -> None:
+        self._timestamp = now()
+
+        # Next stage depends on the user's vote.
         energy_a, energy_b = self.energy_consumptions
         if (victory_index == 0 and energy_a <= energy_b) or (victory_index == 1 and energy_a >= energy_b):
             next_stage = "chose_less_energy_response"
         else:
             next_stage = "chose_more_energy_response"
 
+        # Detect abnormal stage change.
         if self._user_stage != "prompted":
             self._abnormal_stage_change.append((self._user_stage, next_stage))
 
@@ -68,6 +81,9 @@ class RequestState(BaseModel):
         self.response_victory_index = victory_index
 
     def set_energy_vote(self, victory_index: Literal[0, 1]) -> None:
+        self._timestamp = now()
+
+        # Detect abnormal stage change.
         if self._user_stage != "chose_more_energy_response":
             self._abnormal_stage_change.append((self._user_stage, "voted_energy"))
 

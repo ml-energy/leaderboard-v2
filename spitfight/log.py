@@ -11,6 +11,7 @@ class AsyncLogHandler(logging.Handler):
     def emit(self, record):
         self.executor.submit(self.handler.emit, record)
 
+
 def setup_logger(file_name: str):
     file_handler = logging.FileHandler(file_name)  # Send log messages to the file
     # console_handler = logging.StreamHandler()  # Send log messages to the console
