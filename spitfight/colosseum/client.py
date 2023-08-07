@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class ControllerClient:
-    """Client for the Colosseum controller."""
+    """Client for the Colosseum controller, to be used by Gradio."""
 
     def __init__(self, controller_addr: str, timeout: int = 15, request_id: UUID | None = None) -> None:
         """Initialize the controller client."""

@@ -11,6 +11,7 @@ pyrightconfig.json
 # Python
 *.egg-info
 **/__pycache__
+build/
 
 # Data files
 *.log

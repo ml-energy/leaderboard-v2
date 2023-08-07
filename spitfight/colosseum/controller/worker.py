@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class Worker(BaseModel):
+    # TODO: Do we need a separate nickname field here and in the deployment file
+    # when we give TGI an absolute path to the model directory?
+    # What does TGI return from /info in that case?
     hostname: str
     port: int
     model_name: str

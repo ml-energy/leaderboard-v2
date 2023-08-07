@@ -12,6 +12,7 @@ from pydantic import BaseModel, UUID4, Field
 from spitfight.log import setup_logger
 from spitfight.utils import BoundedExpiringDict
 from spitfight.colosseum.controller.worker import WorkerService
+from spitfight.prompt import get_system_prompt, add_system_prompt, Task
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -151,21 +152,24 @@ class Controller:
         # This method is called twice for the same request, once for each model.
         # We first need to see whether this is the first time or the second time.
         # If it's the first time, we should assign models to this request.
-        try:
-            request_state = self.request_states[request_id]
-            prompt = request_state.prompt
-            model_name = request_state.model_names[model_index]
-        except KeyError:
-            # TODO: Use FastChat? Make part of worker?
-            prompt = add_system_prompt(prompt)
+        if request_id not in self.request_states:
+            workers = self.worker_service.choose_two()
+            model_names = [worker.model_name for worker in workers]
             request_state = self.request_states[request_id] = RequestState(
                 request_id=request_id,
                 prompt=prompt,
-                model_names=random.sample(self.workers.keys(), 2),  # TOCTTOU
+                model_names=model_names,
             )
+        request_state = self.request_states[request_id]
+        worker = self.worker_service.get_worker(request_state.model_names[model_index])
+        prompt = add_system_prompt(
+            system_prompt=get_system_prompt("chat"),
+            prompt=prompt,
+            model_name=worker.model_name,  # TODO: Make sure this is good considering nickname.
+        )
 
         # TODO: Handle TGI validation errors, e.g. sequence too long.
-
+        worker.client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens)
 
     def receive_request_stream(self, model_name, prompt, user_id):
         if model_name not in self.model_dest:
