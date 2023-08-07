@@ -1,17 +1,19 @@
-models:
-  - name: bigscience/bloom-560m
-    instances:
-      - ip_address: worker0
-        port: 8001
-        docker_port: 8000
-        device: '"device=0"'
-        num_shard: 1
-  - name: tiiuae/falcon-7b-instruct
-    instances:
-      - ip_address: worker1
-        port: 8002
-        docker_port: 8000
-        device: '"device=1"'
-        num_shard: 1
-
-
+workers:
+  - docker_params:
+      name: worker0
+      gpus: '"device=0"'
+    tgi_params:
+      port: 80
+      model_id: bigscience/bloom-560m
+      num_shard: 1
+    deployment_params:
+      nodename: ampere01
+  - docker_params:
+      name: worker1
+      gpus: '"device=1"'
+    tgi_params:
+      port: 80
+      model_id: tiiuae/falcon-7b-instruct
+      num_shard: 1
+    deployment_params:
+      nodename: ampere01

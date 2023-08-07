@@ -7,6 +7,7 @@ import itertools
 import contextlib
 import argparse
 import os
+from copy import deepcopy
 from typing import Literal
 from dateutil import parser, tz
 
@@ -361,8 +362,8 @@ disable_btn_update = gr.Button.update(interactive=False)
 #     }
 #     _ = requests.post(url, json=data)
 #
-def add_prompt(user_message, history):
-    return "", history + [[user_message, ""]]
+# def add_prompt(user_message, history):
+#     return "", history + [[user_message, ""]]
 #
 # def request_response(history, index):
 #     url = f"{controller_addr}/request"
@@ -378,12 +379,12 @@ def add_prompt(user_message, history):
 #     )
 #     return response
 
-def make_prompt_gen(model_index: Literal[0, 1]):
-    def prompt_gen(client: ControllerClient, history):
-        for text in client.prompt(prompt=history[-1][0], index=model_index):
-            history[-1][1] += text
-            yield history
-    return prompt_gen
+# def make_prompt_gen(model_index: Literal[0, 1]):
+#     def prompt_gen(client: ControllerClient, history):
+#         for text in client.prompt(prompt=history[-1][0], index=model_index):
+#             history[-1][1] += text
+#             yield history
+#     return prompt_gen
 
 # def create_get_response_a(history):
 #     response = request_response(history, 0)
@@ -653,28 +654,77 @@ with block:
             with gr.Row():
                 clear = gr.Button("Clear")
 
+            # response_done_counter = gr.State(0)
+            # response_done_lock = gr.State(Lock())
+            #
+            # def notify_response_done_counter(counter: int, lock: Lock):
+            #     """Both models should have completely responded before we enable the voting buttons.
+            #
+            #     An integer counter `response_done_counter` is incremented whenever a model finishes responding.
+            #     When the counter reaches 2, we enable the response voting buttons and reset the counter to 0.
+            #     
+            #     XXX: Sharing locks with gr.State doesn't work. Need to figure out another way.
+            #     """
+            #     with lock:
+            #         counter += 1
+            #         if counter == 2:
+            #             counter = 0
+            #             return [counter, enable_btn_update, enable_btn_update]
+            #         return [counter, disable_btn_update, disable_btn_update]
+
             def enable_interact():
                 return [enable_btn_update] * 2
 
             def disable_interact():
                 return [disable_btn_update] * 2
 
+            def add_prompt_disable_submit(prompt, history_a, history_b):
+                return [
+                    gr.Textbox.update(value="", interactive=False),
+                    history_a + [[prompt, ""]],
+                    history_b + [[prompt, ""]],
+                    disable_btn_update,
+                ]
+
+            def generate_responses(controller_client: ControllerClient, history_a, history_b):
+                for resp_a, resp_b in itertools.zip_longest(
+                    controller_client.prompt(prompt=history_a[-1][0], index=0),
+                    controller_client.prompt(prompt=history_b[-1][0], index=1),
+                ):
+                    if resp_a is not None:
+                        history_a[-1][1] += resp_a
+                    if resp_b is not None:
+                        history_b[-1][1] += resp_b
+                    yield [history_a, history_b]
+
+
             (prompt_input
-                .submit(add_prompt, [prompt_input, chat_models[0]], [prompt_input , chat_models[0]], queue=False)
-                .then(disable_interact, None, [prompt_input, prompt_submit_btn], queue=False)
-                .then(make_prompt_gen(0), [controller_client, chat_models[0]], chat_models[0], queue=True)
-                .then(enable_interact, None, resp_vote_btn_list, queue=False))
-            (prompt_input
-                .submit(add_prompt, [prompt_input, chat_models[1]], [prompt_input , chat_models[1]], queue=False)
-                .then(make_prompt_gen(1), [controller_client, chat_models[1]], chat_models[1], queue=True))
-            (prompt_submit_btn
-                .click(add_prompt,[prompt_input, chat_models[0]], [prompt_input , chat_models[0]], queue=False)
-                .then(disable_interact, None, [prompt_input, prompt_submit_btn], queue=False)
-                .then(make_prompt_gen(0), [controller_client, chat_models[0]], chat_models[0], queue=True)
+                .submit(add_prompt_disable_submit, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
+                .then(generate_responses, [controller_client, *chat_models], [chat_models[0], chat_models[1]], queue=True)
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
             (prompt_submit_btn
-                .click(add_prompt,[prompt_input, chat_models[1]], [prompt_input , chat_models[1]], queue=False)
-                .then(make_prompt_gen(1), [controller_client, chat_models[1]], chat_models[1], queue=True))
+                .click(add_prompt_disable_submit, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
+                .then(generate_responses, [controller_client, *chat_models], [chat_models[0], chat_models[1]], queue=True)
+                .then(enable_interact, None, resp_vote_btn_list, queue=False))
+
+            # (prompt_input
+            #     .submit(add_prompt, [prompt_input, chat_models[0]], [prompt_input , chat_models[0]], queue=False)
+            #     .then(disable_interact, None, [prompt_input, prompt_submit_btn], queue=False)
+            #     .then(make_prompt_gen(0), [controller_client, chat_models[0]], chat_models[0], queue=True)
+            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
+            # (prompt_input
+            #     .submit(add_prompt, [prompt_input, chat_models[1]], [prompt_input , chat_models[1]], queue=False)
+            #     .then(make_prompt_gen(1), [controller_client, chat_models[1]], chat_models[1], queue=True)
+            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
+            # (prompt_submit_btn
+            #     .click(add_prompt,[prompt_input, chat_models[0]], [prompt_input , chat_models[0]], queue=False)
+            #     .then(disable_interact, None, [prompt_input, prompt_submit_btn], queue=False)
+            #     .then(make_prompt_gen(0), [controller_client, chat_models[0]], chat_models[0], queue=True)
+            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
+            # (prompt_submit_btn
+            #     .click(add_prompt,[prompt_input, chat_models[1]], [prompt_input , chat_models[1]], queue=False)
+            #     .then(make_prompt_gen(1), [controller_client, chat_models[1]], chat_models[1], queue=True)
+            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
 
             left_resp_vote_btn.click(
                 make_resp_vote_func(0),
@@ -702,19 +752,19 @@ with block:
                 queue=False,
             )
 
-            def restart():
-                return [gr.Button.update(visible=False) for _ in range(2)] + [ gr.Markdown.update(visible=False) ]
+            # XXX: gr.update(visible=False)?
+            def clear_fn(client: ControllerClient):
+                return [client, gr.Button.update(visible=False) for _ in range(2)] + [ gr.Markdown.update(visible=False) ]
 
-            clear.click(lambda: None, None, chat_models[0], queue=False).then(
-                        lambda: None, None, chat_models[1], queue=False).then(
-                        lambda: None, None, masked_model_name[0], queue=False).then(
-                        lambda: None, None, masked_model_name[1], queue=False).then(
-                        restart, [], energy_vote_btn_list + [energy_res], queue=False).then(
-                        enable_interact, None, [prompt_input, prompt_submit_btn], queue=False
-            )
-            # TODO: need to notify the controller?
+            components_to_be_cleared = chat_models + masked_model_name
+            (clear
+                .click(lambda: [None] * len(components_to_be_cleared), [], components_to_be_cleared, queue=False)
+                .then(clear_fn, [], energy_vote_btn_list + [energy_res], queue=False)
+                # Deepcopying the client will give it a new request ID (See __deepcopy__ override).
+                .then(deepcopy, controller_client, controller_client, queue=False)
+                .then(enable_interact, None, [prompt_input, prompt_submit_btn], queue=False))
 
-        # Tab 3: About page.
+        # Tab: About page.
         with gr.Tab("About"):
             # Read in LEADERBOARD.md
             gr.Markdown(open("docs/leaderboard.md").read())
