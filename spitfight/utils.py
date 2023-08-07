@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import heapq
-from typing import TypeVar, Generic, Callable
+from typing import TypeVar, Generic
 
 K = TypeVar('K')
 V = TypeVar('V')

@@ -12,7 +12,7 @@ from pydantic import BaseModel, UUID4, Field
 from spitfight.log import setup_logger
 from spitfight.utils import BoundedExpiringDict
 from spitfight.colosseum.controller.worker import WorkerService
-from spitfight.prompt import get_system_prompt, add_system_prompt, Task
+from spitfight.prompt import get_system_prompt, add_system_prompt
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -169,7 +169,8 @@ class Controller:
         )
 
         # TODO: Handle TGI validation errors, e.g. sequence too long.
-        worker.client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens)
+        async for resp in worker.client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
+            yield resp.token.text
 
     def receive_request_stream(self, model_name, prompt, user_id):
         if model_name not in self.model_dest:

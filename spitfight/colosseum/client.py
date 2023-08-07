@@ -46,7 +46,7 @@ class ControllerClient:
 
     def prompt(self, prompt: str, index: Literal[0, 1]) -> Generator[str, None, None]:
         """Generate the response of the `index`th model with the prompt."""
-        prompt_request = PromptRequest(request_id=self.request_id, prompt=prompt, index=index)
+        prompt_request = PromptRequest(request_id=self.request_id, prompt=prompt, model_index=index)
         resp = requests.post(
             f"http://{self.controller_addr}{COLOSSEUM_PROMPT_ROUTE}",
             json=prompt_request.dict(),

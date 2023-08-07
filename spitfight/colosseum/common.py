@@ -12,7 +12,7 @@ COLOSSEUM_ENERGY_VOTE_ROUTE = "/energy_vote"
 class PromptRequest(BaseModel):
     request_id: UUID4
     prompt: str
-    index: Literal[0, 1]
+    model_index: Literal[0, 1]
 
 
 class ResponseVoteRequest(BaseModel):

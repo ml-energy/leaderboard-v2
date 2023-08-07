@@ -1,17 +1,5 @@
-import json
-import time
-import yaml
-import random
-import asyncio
-import requests
-from uuid import UUID
-from typing import Literal, Optional
-from collections import defaultdict
-
-import uvicorn
-from text_generation import Client
-from pydantic import UUID4, BaseModel, BaseConfig
-from fastapi import FastAPI, Request, BackgroundTasks, Depends
+from pydantic import BaseConfig
+from fastapi import FastAPI, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
 
@@ -56,7 +44,7 @@ async def prompt(
     controller: Controller = Depends(get_global_controller),
 ):
     return StreamingResponse(
-        controller.prompt(request.request_id, request.prompt, request.index),
+        controller.prompt(request.request_id, request.prompt, request.model_index)
     )
 """
     system_prompt = "A chat between a human user and an assistant, who gives helpful and polite answers to the user's questions. "
