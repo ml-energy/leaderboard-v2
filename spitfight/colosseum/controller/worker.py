@@ -17,6 +17,7 @@ class Worker(BaseModel):
     hostname: str
     port: int
     model_name: str
+    model_id: str
     status: Literal["up", "down"]
 
     class Config:
@@ -43,8 +44,8 @@ class Worker(BaseModel):
         if response.status_code != 200:
             raise ValueError(f"Could not get /info from {self!r}.")
         info = response.json()
-        if info["model_name"] != self.model_name:
-            raise ValueError(f"Model name mismatch: {info['model_name']} != {self.model_name}")
+        if info["model_name"] != self.model_id:
+            raise ValueError(f"Model name mismatch: {info['model_name']} != {self.model_id}")
         self.status = "up"
 
     async def check_status(self) -> None:
@@ -61,13 +62,13 @@ class Worker(BaseModel):
                 logger.warning("GET /info from %s returned %s.", repr(self), response.json())
                 return
             info = response.json()
-            if info["model_name"] != self.model_name:
+            if info["model_name"] != self.model_id:
                 self.status = "down"
                 logger.warning(
                     "Model name mismatch for worker %s: %s != %s",
                     repr(self),
                     info["model_name"],
-                    self.model_name,
+                    self.model_id,
                 )
                 return
         self.status = "up"
@@ -97,6 +98,7 @@ class WorkerService:
                 hostname=model["docker_params"]["name"],
                 port=model["tgi_params"]["port"],
                 model_name=model_name,
+                model_id=model["tgi_params"]["model_id"],
                 status="up",
             )
             worker.audit()
