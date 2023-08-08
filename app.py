@@ -330,7 +330,7 @@ Every benchmark is limited in some sense -- Before you interpret the results, pl
 
 # The app will not start without a controller address set.
 controller_addr = os.environ["COLOSSEUM_CONTROLLER_ADDR"]
-controller_client = gr.State(ControllerClient(controller_addr=controller_addr, timeout=15))
+global_controller_client = ControllerClient(controller_addr=controller_addr, timeout=15)
 
 # Caching frequently used Component update dictionaries.
 # XXX: Does gr.update(interactive=True) work?
@@ -614,7 +614,7 @@ with block:
 
         # Tab: Colosseum.
         with gr.TabItem("Colosseum⚔️️"):
-            gr.Markdown(open("Colosseum.md").read())
+            gr.Markdown(open("docs/colosseum.md").read())
             with gr.Row():
                 with gr.Column(scale=20):
                     prompt_input = gr.Textbox(
@@ -672,39 +672,48 @@ with block:
             #             return [counter, enable_btn_update, enable_btn_update]
             #         return [counter, disable_btn_update, disable_btn_update]
 
+            controller_client = gr.State()
+
             def enable_interact():
                 return [enable_btn_update] * 2
 
             def disable_interact():
                 return [disable_btn_update] * 2
 
-            def add_prompt_disable_submit(prompt, history_a, history_b):
+            def add_prompt_disable_submit_prepare_client(prompt, history_a, history_b):
                 return [
-                    gr.Textbox.update(value="", interactive=False),
+                    gr.Textbox.update(value=" ", interactive=False),
                     history_a + [[prompt, ""]],
                     history_b + [[prompt, ""]],
                     disable_btn_update,
                 ]
 
-            def generate_responses(controller_client: ControllerClient, history_a, history_b):
-                for resp_a, resp_b in itertools.zip_longest(
-                    controller_client.prompt(prompt=history_a[-1][0], index=0),
-                    controller_client.prompt(prompt=history_b[-1][0], index=1),
+            # def generate_responses(history_a, history_b):
+            #     print(f"Send {history_a, history_b} to controller", flush=True)
+            #     return [deepcopy(global_controller_client), history_a, history_b]
+
+
+            def generate_responses(history_a, history_b):
+                print(f"Send {history_a, history_b} to controller", flush=True)
+                client = deepcopy(global_controller_client)
+                for resp_a, resp_b in zip(
+                    client.prompt(prompt=history_a[-1][0], index=0),
+                    client.prompt(prompt=history_b[-1][0], index=1),
                 ):
                     if resp_a is not None:
                         history_a[-1][1] += resp_a
                     if resp_b is not None:
                         history_b[-1][1] += resp_b
-                    yield [history_a, history_b]
+                    yield [client, history_a, history_b]
 
 
             (prompt_input
-                .submit(add_prompt_disable_submit, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
-                .then(generate_responses, [controller_client, *chat_models], [chat_models[0], chat_models[1]], queue=True)
+                .submit(add_prompt_disable_submit_prepare_client, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
+                .then(generate_responses, chat_models, [controller_client, *chat_models], queue=True)
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
             (prompt_submit_btn
-                .click(add_prompt_disable_submit, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
-                .then(generate_responses, [controller_client, *chat_models], [chat_models[0], chat_models[1]], queue=True)
+                .click(add_prompt_disable_submit_prepare_client, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
+                .then(generate_responses, chat_models, [controller_client, *chat_models], queue=True)
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
 
             # (prompt_input
@@ -753,15 +762,13 @@ with block:
             )
 
             # XXX: gr.update(visible=False)?
-            def clear_fn(client: ControllerClient):
-                return [client, gr.Button.update(visible=False) for _ in range(2)] + [ gr.Markdown.update(visible=False) ]
+            def clear_fn():
+                return [gr.Button.update(visible=False) for _ in range(2)] + [ gr.Markdown.update(visible=False) ]
 
             components_to_be_cleared = chat_models + masked_model_name
             (clear
                 .click(lambda: [None] * len(components_to_be_cleared), [], components_to_be_cleared, queue=False)
                 .then(clear_fn, [], energy_vote_btn_list + [energy_res], queue=False)
-                # Deepcopying the client will give it a new request ID (See __deepcopy__ override).
-                .then(deepcopy, controller_client, controller_client, queue=False)
                 .then(enable_interact, None, [prompt_input, prompt_submit_btn], queue=False))
 
         # Tab: About page.
@@ -781,4 +788,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     block.queue(
         concurrency_count=args.concurrency, status_update_rate=10, api_open=False
-    ).launch(share=args.share)
+    ).launch(share=args.share, show_error=True, debug=True)

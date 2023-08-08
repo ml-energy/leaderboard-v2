@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import asyncio
-from uuid import UUID
 from datetime import datetime
 from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
 from pytz import timezone
-from pydantic import BaseModel, UUID4, Field
+from pydantic import BaseModel, Field
 from text_generation.errors import OverloadedError, ValidationError
 from fastapi.exceptions import HTTPException
 
@@ -17,7 +16,6 @@ from spitfight.colosseum.controller.worker import WorkerService
 from spitfight.prompt import get_system_prompt, add_system_prompt
 
 if TYPE_CHECKING:
-    from uuid import UUID
     from spitfight.colosseum.controller.router import ControllerConfig
 
 controller_logger = get_logger(__name__)
@@ -46,7 +44,7 @@ class RequestState(BaseModel):
 
     This model is also serialized as is and logged.
     """
-    request_id: UUID4
+    request_id: str
     prompt: str
     model_names: list[str]
     responses: list[str] = ["EMPTY", "EMPTY"]
@@ -106,7 +104,7 @@ class Controller:
     ):
         self.max_new_tokens = max_new_tokens
         self.max_num_req_states = max_num_req_states
-        self.request_states: BoundedExpiringDict[UUID, RequestState] = \
+        self.request_states: BoundedExpiringDict[str, RequestState] = \
             BoundedExpiringDict(req_state_expiration_time)
         self.worker_service = worker_service
 
@@ -125,7 +123,7 @@ class Controller:
             await self.worker_service.check_workers()
             self.request_states.cleanup()
 
-    def response_vote(self, request_id: UUID, victory_index: Literal[0, 1]) -> RequestState | None:
+    def response_vote(self, request_id: str, victory_index: Literal[0, 1]) -> RequestState | None:
         """Record the user's response vote and return the new state."""
         if (state := self.request_states.get(request_id)) is not None:
             state.set_response_vote(victory_index)
@@ -133,7 +131,7 @@ class Controller:
             return state
         return None
 
-    def energy_vote(self, request_id: UUID, victory_index: Literal[0, 1]) -> RequestState | None:
+    def energy_vote(self, request_id: str, victory_index: Literal[0, 1]) -> RequestState | None:
         """Record the user's energy vote and return the new state."""
         # Pop the state from the dict, since this is the last step.
         if (state := self.request_states.pop(request_id)) is not None:
@@ -144,7 +142,7 @@ class Controller:
 
     async def prompt(
         self,
-        request_id: UUID,
+        request_id: str,
         prompt: str,
         model_index: Literal[0, 1],
     ) -> AsyncGenerator[bytes, None]:

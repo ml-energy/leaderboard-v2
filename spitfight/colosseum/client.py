@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import logging
 import unittest
+import contextlib
 from uuid import uuid4, UUID
 from copy import deepcopy
 from typing import Generator, Literal
@@ -21,8 +21,6 @@ from spitfight.colosseum.common import (
     EnergyVoteRequest,
 )
 
-logger = logging.getLogger(__name__)
-
 
 class ControllerClient:
     """Client for the Colosseum controller, to be used by Gradio."""
@@ -31,28 +29,29 @@ class ControllerClient:
         """Initialize the controller client."""
         self.controller_addr = controller_addr
         self.timeout = timeout
-        self.request_id = request_id or uuid4()
+        self.request_id = str(request_id) or str(uuid4())
 
-    def __deepcopy__(self, _: dict) -> ControllerClient:
+    def __deepcopy__(self, memo: dict) -> ControllerClient:
         """Return a deepcopy of the client with a new request ID.
 
         This exploints the fact that gr.State simply deepcopies objects.
         """
         return ControllerClient(
-            controller_addr=self.controller_addr,
-            timeout=self.timeout,
+            controller_addr=deepcopy(self.controller_addr, memo),
+            timeout=deepcopy(self.timeout, memo),
             request_id=uuid4(),
         )
 
     def prompt(self, prompt: str, index: Literal[0, 1]) -> Generator[str, None, None]:
         """Generate the response of the `index`th model with the prompt."""
         prompt_request = PromptRequest(request_id=self.request_id, prompt=prompt, model_index=index)
-        resp = requests.post(
-            f"http://{self.controller_addr}{COLOSSEUM_PROMPT_ROUTE}",
-            json=prompt_request.dict(),
-            stream=True,
-            timeout=self.timeout,
-        )
+        with _catch_requests_exceptions():
+            resp = requests.post(
+                f"http://{self.controller_addr}{COLOSSEUM_PROMPT_ROUTE}",
+                json=prompt_request.dict(),
+                stream=True,
+                timeout=self.timeout,
+            )
         _check_response(prompt_request, resp)
         # XXX: Why can't the server just yield `text + "\n"` and here we just iter_lines?
         for chunk in resp.iter_lines(decode_unicode=False, delimiter=b"\0"):
@@ -79,16 +78,20 @@ class ControllerClient:
         _check_response(energy_vote_request, resp)
 
 
+@contextlib.contextmanager
+def _catch_requests_exceptions():
+    """Catch requests exceptions and raise gr.Error instead."""
+    try:
+        yield
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        raise gr.Error("Failed to connect to our the backend server. Please try again later.")
+
+
 def _check_response(request: BaseModel, response: requests.Response) -> None:
-    if response.status_code != 200:
-        logger.error(
-            "Request to %s failed with code %d.\nRequest: %s\nResponse: %s",
-            COLOSSEUM_RESP_VOTE_ROUTE,
-            response.status_code,
-            request.json(),
-            response.text,
-        )
-        raise gr.Error("Failed to talked to the backend. Please try again later.")
+    if 400 <= response.status_code < 500:
+        raise gr.Error(response.json()["detail"])
+    elif response.status_code >= 500:
+        raise gr.Error("Failed to talk to our backend server. Please try again later.")
 
 
 class TestControllerClient(unittest.TestCase):

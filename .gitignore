@@ -15,3 +15,4 @@ build/
 
 # Data files
 *.log
+pegasus/consumed.yaml

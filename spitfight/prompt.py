@@ -1,5 +1,7 @@
 """An abstraction layer for prompting different models."""
 
+from __future__ import annotations
+
 import enum
 
 from fastchat.model.model_adapter import get_conversation_template
