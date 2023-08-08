@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
 from pytz import timezone
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, PrivateAttr
 from text_generation.errors import OverloadedError, ValidationError
 from fastapi.exceptions import HTTPException
 
@@ -53,12 +53,12 @@ class RequestState(BaseModel):
     energy_victory_index: Optional[Literal[0, 1]] = None
 
     # The time when the user's stage changed.
-    _timestamp: datetime = Field(default_factory=now)
+    _timestamp: datetime = PrivateAttr(default_factory=now)
     # The user's current stage.
-    _user_stage: UserStage = "prompted"
+    _user_stage: UserStage = PrivateAttr(default="prompted")
     # When the the user is not going through the aforementioned stages,
     # the user's stage transition is recorded here.
-    _abnormal_stage_change: list[tuple[UserStage, UserStage]] = []
+    _abnormal_stage_change: list[tuple[UserStage, UserStage]] = PrivateAttr(default_factory=list)
 
     def set_response_and_energy(self, model_index: Literal[0, 1], response: str, energy_consumption: float) -> None:
         self._timestamp = now()
@@ -151,7 +151,7 @@ class Controller:
         if request_id not in self.request_states:
             workers = self.worker_service.choose_two()
             model_names = [worker.model_name for worker in workers]
-            request_state = self.request_states[request_id] = RequestState(
+            self.request_states[request_id] = RequestState(
                 request_id=request_id,
                 prompt=prompt,
                 model_names=model_names,
@@ -169,19 +169,20 @@ class Controller:
         prompt = add_system_prompt(
             system_prompt=get_system_prompt("chat"),
             prompt=prompt,
-            model_name=worker.model_name,
+            model_name=worker.model_id,
         )
 
         # Request the model worker to stream the response to the user's prompt.
         response = ""
         energy = 0.0
+        client = worker.get_client()
         try:
-            async for resp in worker.client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
+            async for resp in client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
                 # Even special tokens consume energy when they're generated.
                 energy += resp.token.energy
                 if not resp.token.special:
                     response += resp.token.text
-                    yield json.dumps(response.token.text).encode() + b"\0"
+                    yield json.dumps(resp.token.text).encode() + b"\0"
         except OverloadedError:
             # TODO: Define controller errors in spitfight.colosseum.controller.errors.
             raise HTTPException(status_code=429, detail="Model overloaded. Pleaes try again later.")

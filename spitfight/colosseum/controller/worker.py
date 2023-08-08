@@ -27,7 +27,7 @@ class Worker(BaseModel):
     def url(self) -> str:
         return f"http://{self.hostname}:{self.port}"
 
-    def client(self) -> AsyncClient:
+    def get_client(self) -> AsyncClient:
         return AsyncClient(base_url=self.url)
 
     def audit(self) -> None:
@@ -44,8 +44,8 @@ class Worker(BaseModel):
         if response.status_code != 200:
             raise ValueError(f"Could not get /info from {self!r}.")
         info = response.json()
-        if info["model_name"] != self.model_id:
-            raise ValueError(f"Model name mismatch: {info['model_name']} != {self.model_id}")
+        if info["model_id"] != self.model_id:
+            raise ValueError(f"Model name mismatch: {info['model_id']} != {self.model_id}")
         self.status = "up"
 
     async def check_status(self) -> None:
@@ -62,12 +62,12 @@ class Worker(BaseModel):
                 logger.warning("GET /info from %s returned %s.", repr(self), response.json())
                 return
             info = response.json()
-            if info["model_name"] != self.model_id:
+            if info["model_id"] != self.model_id:
                 self.status = "down"
                 logger.warning(
                     "Model name mismatch for worker %s: %s != %s",
                     repr(self),
-                    info["model_name"],
+                    info["model_id"],
                     self.model_id,
                 )
                 return

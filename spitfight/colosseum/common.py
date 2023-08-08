@@ -7,6 +7,7 @@ from pydantic import BaseModel
 COLOSSEUM_PROMPT_ROUTE = "/prompt"
 COLOSSEUM_RESP_VOTE_ROUTE = "/response_vote"
 COLOSSEUM_ENERGY_VOTE_ROUTE = "/energy_vote"
+COLOSSEUM_HEALTH_ROUTE = "/health"
 
 
 class PromptRequest(BaseModel):

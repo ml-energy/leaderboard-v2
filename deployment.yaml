@@ -1,31 +1,31 @@
 workers:
-  - name: bigscience/bloom-560m
+  # - name: bigscience/bloom-560m
+  #   docker_params:
+  #     name: worker0
+  #     gpus: '"device=0"'
+  #   tgi_params:
+  #     port: 80
+  #     model_id: bigscience/bloom-560m
+  #     num_shard: 1
+  #   deployment_params:
+  #     nodename: ampere01
+  - name: tiiuae/falcon-7b-instruct
     docker_params:
       name: worker0
       gpus: '"device=0"'
     tgi_params:
       port: 80
-      model_id: bigscience/bloom-560m
+      model_id: tiiuae/falcon-7b-instruct
       num_shard: 1
     deployment_params:
-      nodename: ampere01
-  - name: tiiuae/falcon-7b-instruct
+      nodename: ampere02
+  - name: metaai/llama-2-7b-chat
     docker_params:
       name: worker1
       gpus: '"device=1"'
     tgi_params:
       port: 80
-      model_id: tiiuae/falcon-7b-instruct
-      num_shard: 1
-    deployment_params:
-      nodename: ampere01
-  - name: metaai/llama-2-7b-chat
-    docker_params:
-      name: worker2
-      gpus: '"device=2"'
-    tgi_params:
-      port: 80
       model_id: /weights/metaai/Llama-2-7b-chat-hf
       num_shard: 1
     deployment_params:
-      nodename: ampere01
+      nodename: ampere02

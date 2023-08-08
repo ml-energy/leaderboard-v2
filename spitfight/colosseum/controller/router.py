@@ -8,6 +8,7 @@ from spitfight.colosseum.common import (
     COLOSSEUM_PROMPT_ROUTE,
     COLOSSEUM_RESP_VOTE_ROUTE,
     COLOSSEUM_ENERGY_VOTE_ROUTE,
+    COLOSSEUM_HEALTH_ROUTE,
     PromptRequest,
     ResponseVoteRequest,
     ResponseVoteResponse,
@@ -74,3 +75,7 @@ async def energy_vote(
     if (state := controller.energy_vote(request.request_id, request.victory_index)) is None:
         raise HTTPException(status_code=410, detail="Colosseum battle session timeout expired.")
     return EnergyVoteResponse(model_names=state.model_names)
+
+@app.get(COLOSSEUM_HEALTH_ROUTE)
+async def health():
+    return "OK\n"
