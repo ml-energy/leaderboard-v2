@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import random
+import json
 import asyncio
 from uuid import UUID
 from datetime import datetime
@@ -8,8 +8,10 @@ from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
 from pytz import timezone
 from pydantic import BaseModel, UUID4, Field
+from text_generation.errors import OverloadedError, ValidationError
+from fastapi.exceptions import HTTPException
 
-from spitfight.log import setup_logger
+from spitfight.log import get_logger
 from spitfight.utils import BoundedExpiringDict
 from spitfight.colosseum.controller.worker import WorkerService
 from spitfight.prompt import get_system_prompt, add_system_prompt
@@ -18,8 +20,12 @@ if TYPE_CHECKING:
     from uuid import UUID
     from spitfight.colosseum.controller.router import ControllerConfig
 
-controller_logger = setup_logger("controller.log")
-user_logger = setup_logger("user.log")
+controller_logger = get_logger(__name__)
+request_logger = get_logger("colosseum_requests")
+
+
+def now() -> datetime:
+    return datetime.now(tz=timezone("US/Eastern"))
 
 
 # Internal states
@@ -33,9 +39,6 @@ UserStage = Literal[
     "chose_more_energy_response",
     "voted_energy",
 ]
-
-def now() -> datetime:
-    return datetime.now(tz=timezone("US/Eastern"))
 
 
 class RequestState(BaseModel):
@@ -122,15 +125,11 @@ class Controller:
             await self.worker_service.check_workers()
             self.request_states.cleanup()
 
-    def _log_state(self, state: RequestState) -> None:
-        """Log the state of a request."""
-        controller_logger.info(state.json())
-
     def response_vote(self, request_id: UUID, victory_index: Literal[0, 1]) -> RequestState | None:
         """Record the user's response vote and return the new state."""
         if (state := self.request_states.get(request_id)) is not None:
             state.set_response_vote(victory_index)
-            self._log_state(state)
+            request_logger.info(state.json())
             return state
         return None
 
@@ -139,7 +138,7 @@ class Controller:
         # Pop the state from the dict, since this is the last step.
         if (state := self.request_states.pop(request_id)) is not None:
             state.set_energy_vote(victory_index)
-            self._log_state(state)
+            request_logger.info(state.json())
             return state
         return None
 
@@ -148,10 +147,9 @@ class Controller:
         request_id: UUID,
         prompt: str,
         model_index: Literal[0, 1],
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[bytes, None]:
         # This method is called twice for the same request, once for each model.
-        # We first need to see whether this is the first time or the second time.
-        # If it's the first time, we should assign models to this request.
+        # If it's the first time this method is called, assign models to the request.
         if request_id not in self.request_states:
             workers = self.worker_service.choose_two()
             model_names = [worker.model_name for worker in workers]
@@ -161,40 +159,40 @@ class Controller:
                 model_names=model_names,
             )
         request_state = self.request_states[request_id]
-        worker = self.worker_service.get_worker(request_state.model_names[model_index])
+        model_name = request_state.model_names[model_index]
+        try:
+            worker = self.worker_service.get_worker(model_name)
+        except KeyError:
+            controller_logger.error("Worker %s not found.", model_name)
+            raise
+        except RuntimeError:
+            controller_logger.error("Worker %s is dead.", model_name)
+            raise
         prompt = add_system_prompt(
             system_prompt=get_system_prompt("chat"),
             prompt=prompt,
-            model_name=worker.model_name,  # TODO: Make sure this is good considering nickname.
+            model_name=worker.model_name,
         )
 
-        # TODO: Handle TGI validation errors, e.g. sequence too long.
-        async for resp in worker.client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
-            yield resp.token.text
+        # Request the model worker to stream the response to the user's prompt.
+        response = ""
+        energy = 0.0
+        try:
+            async for resp in worker.client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
+                # Even special tokens consume energy when they're generated.
+                energy += resp.token.energy
+                if not resp.token.special:
+                    response += resp.token.text
+                    yield json.dumps(response.token.text).encode() + b"\0"
+        except OverloadedError:
+            # TODO: Define controller errors in spitfight.colosseum.controller.errors.
+            raise HTTPException(status_code=429, detail="Model overloaded. Pleaes try again later.")
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
-    def receive_request_stream(self, model_name, prompt, user_id):
-        if model_name not in self.model_dest:
-            return None
-        worker_addr, worker_port = random.choice(list(self.model_dest[model_name]))
-        if not worker_addr or not worker_port:
-            yield None
-        url = f'http://{worker_addr}:{worker_port}'
-        client = Client(url)
-        text = ""
-        self.request_states[user_id]['prompt'] = prompt
-        model_id = self.request_states[user_id]['model'].index(model_name)
-        for response in client.generate_stream(prompt, max_new_tokens=self.max_new_tokens):
-            if not response.token.special:
-                text += response.token.text
-                self.request_states[user_id]['energy'][model_id] += response.token.energy
-                yield json.dumps(response.token.text).encode() + b"\0"
-
-        controller_logger.info(f"User {user_id} request {prompt} from {model_name} "
-                    f"with energy {self.request_states[user_id]['energy'][model_id]}. "
-                    f"with response {text} ")
-        if user_id in self.request_states:
-            self.request_states[user_id]['response'][model_id] = text
-        # yield text
+        # XXX: This part could be done in the background with BackgroundTasks.
+        request_state.set_response_and_energy(model_index, response, energy)
+        request_logger.info(request_state.json())
 
 
 CONTROLLER: Controller | None = None

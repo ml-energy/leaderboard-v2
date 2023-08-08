@@ -1,6 +1,5 @@
 import yaml
 import random
-import logging
 import asyncio
 from typing import Literal
 from functools import cached_property
@@ -9,13 +8,12 @@ import httpx
 from pydantic import BaseModel
 from text_generation import AsyncClient
 
-logger = logging.getLogger(__name__)
+from spitfight.log import get_logger
+
+logger = get_logger(__name__)
 
 
 class Worker(BaseModel):
-    # TODO: Do we need a separate nickname field here and in the deployment file
-    # when we give TGI an absolute path to the model directory?
-    # What does TGI return from /info in that case?
     hostname: str
     port: int
     model_name: str
@@ -28,7 +26,6 @@ class Worker(BaseModel):
     def url(self) -> str:
         return f"http://{self.hostname}:{self.port}"
 
-    @cached_property
     def client(self) -> AsyncClient:
         return AsyncClient(base_url=self.url)
 
@@ -94,7 +91,7 @@ class WorkerService:
         self.workers: list[Worker] = []
         worker_model_names = set()
         for model in deployment["workers"]:
-            model_name = model["tgi_params"]["model_id"]
+            model_name = model["name"]
             worker_model_names.add(model_name)
             worker = Worker(
                 hostname=model["docker_params"]["name"],
@@ -110,17 +107,16 @@ class WorkerService:
 
     def get_worker(self, model_name: str) -> Worker:
         """Get a worker by model name."""
-        worker_exists = False
         for worker in self.workers:
             if worker.model_name == model_name:
                 if worker.status == "down":
                     # This is an unfortunate case where, when the two models were chosen,
                     # both workers were up, but one of them went down before the request
-                    # completed. We'll just raise an 500 internal error and have the user
+                    # completed. We'll just raise a 500 internal error and have the user
                     # try again. This won't be common.
                     raise RuntimeError(f"The worker with model name {model_name} is down.")
                 return worker
-        raise RuntimeError(f"Worker with model name {model_name} does not exist.")
+        raise ValueError(f"Worker with model name {model_name} does not exist.")
 
     def choose_two(self) -> tuple[Worker, Worker]:
         """Choose two different workers.

@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
 
+from spitfight.log import init_queued_root_logger, shutdown_queued_root_loggers
 from spitfight.colosseum.common import (
     COLOSSEUM_PROMPT_ROUTE,
     COLOSSEUM_RESP_VOTE_ROUTE,
@@ -25,6 +26,8 @@ class ControllerConfig(BaseConfig):
     max_num_req_states: int = 10000
     req_state_expiration_time: int = 600
     deployment_yaml: str = "deployment.yaml"
+    controller_log_file: str = "controller.log"
+    request_log_file: str = "requests.log"
 
 
 app = FastAPI()
@@ -32,11 +35,14 @@ settings = ControllerConfig()
 
 @app.on_event("startup")
 async def startup_event():
+    init_queued_root_logger("spitfight.colosseum.controller", settings.controller_log_file)
+    init_queued_root_logger("colosseum_requests", settings.request_log_file)
     init_global_controller(settings)
 
 @app.on_event("shutdown")
 async def shutdown_event():
     get_global_controller().shutdown()
+    shutdown_queued_root_loggers()
 
 @app.post(COLOSSEUM_PROMPT_ROUTE)
 async def prompt(

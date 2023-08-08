@@ -19,7 +19,7 @@ import plotly.express as px
 from pandas.api.types import is_numeric_dtype, is_float_dtype
 pio.templates.default = "plotly_white"
 
-from spitfight.client import ControllerClient
+from spitfight.colosseum.client import ControllerClient
 
 
 class TableManager:
