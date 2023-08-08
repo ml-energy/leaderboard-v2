@@ -50,7 +50,7 @@ class RequestState(BaseModel):
     responses: list[str] = ["EMPTY", "EMPTY"]
     energy_consumptions: list[float] = [-1.0, -1.0]
     response_victory_index: Optional[Literal[0, 1]] = None
-    energy_victory_index: Optional[Literal[0, 1]] = None
+    extra_energy_was_worth: Optional[bool] = None
 
     # The time when the user's stage changed.
     timestamp: datetime = Field(default_factory=now)
@@ -82,7 +82,7 @@ class RequestState(BaseModel):
         self.user_stage = next_stage
         self.response_victory_index = victory_index
 
-    def set_energy_vote(self, victory_index: Literal[0, 1]) -> None:
+    def set_energy_vote(self, is_worth: bool) -> None:
         self.timestamp = now()
 
         # Detect abnormal stage change.
@@ -90,7 +90,7 @@ class RequestState(BaseModel):
             self.abnormal_stage_change.append((self.user_stage, "voted_energy"))
 
         self.user_stage = "voted_energy"
-        self.energy_victory_index = victory_index
+        self.extra_energy_was_worth = is_worth
 
 
 class Controller:
@@ -131,11 +131,11 @@ class Controller:
             return state
         return None
 
-    def energy_vote(self, request_id: str, victory_index: Literal[0, 1]) -> RequestState | None:
+    def energy_vote(self, request_id: str, is_worth: bool) -> RequestState | None:
         """Record the user's energy vote and return the new state."""
         # Pop the state from the dict, since this is the last step.
         if (state := self.request_states.pop(request_id)) is not None:
-            state.set_energy_vote(victory_index)
+            state.set_energy_vote(is_worth)
             request_logger.info(state.json())
             return state
         return None

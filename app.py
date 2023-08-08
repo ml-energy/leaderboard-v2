@@ -351,23 +351,24 @@ def make_resp_vote_func(victory_index: Literal[0, 1]):
         vote_response = client.response_vote(victory_index=victory_index)
         model_name_a, model_name_b = map(lambda n: f"## {n}", vote_response.model_names)
         energy_a, energy_b = vote_response.energy_consumptions
+        # User liked the model that also consumed less energy.
         if (victory_index == 0 and energy_a <= energy_b) or (victory_index == 1 and energy_a >= energy_b):
             energy_res = save_energy(energy_a, energy_b)
             return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
-                    gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=False), \
-                    gr.Button.update(visible=True, interactive=False)
-
+                    gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=False, interactive=False), \
+                    gr.Button.update(visible=False, interactive=False), gr.update(interactive=True)
+        # User like the model that consumed more energy.
         else:
             energy_res = cost_energy(energy_a, energy_b)
             return disable_btn_update, disable_btn_update, gr.Markdown.update("## Anonymous 🤫"), gr.Markdown.update("## Anonymous 🤫"), \
-                    gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True)
+                    gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True), gr.update(interactive=False)
     return resp_vote_func
 
-def make_energy_vote_func(victory_index: Literal[0, 1]):
+def make_energy_vote_func(is_worth: bool):
     def energy_vote_func(client: ControllerClient):
-        vote_response = client.energy_vote(victory_index=victory_index)
+        vote_response = client.energy_vote(is_worth=is_worth)
         model_name_a, model_name_b = map(lambda n: f"## {n}", vote_response.model_names)
-        return [gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b)] + [disable_btn_update for _ in range(2)] + [disable_btn_update, disable_btn_update]
+        return [gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b)] + [disable_btn_update for _ in range(2)] + [disable_btn_update, disable_btn_update, gr.update(interactive=True)]
     return energy_vote_func
 
 
@@ -377,6 +378,136 @@ with gr.Blocks(css=css) as block:
         gr.HTML("<h1><a href='https://ml.energy' class='text-logo'>ML.ENERGY</a> Leaderboard</h1>")
 
     with gr.Tabs():
+        # Tab: Colosseum.
+        with gr.TabItem("Colosseum⚔️️"):
+            gr.Markdown(open("docs/colosseum.md").read())
+            with gr.Row():
+                with gr.Column(scale=20):
+                    prompt_input = gr.Textbox(
+                        show_label=False,
+                        placeholder="Input prompt and press ENTER"
+                    )
+                with gr.Column(scale=1, min_width=60):
+                    prompt_submit_btn = gr.Button(value="📤\nFight!", elem_classes=["btn-submit"])
+
+            with gr.Row():
+                masked_model_names = []
+                with gr.Column():
+                    masked_model_names.append(gr.Markdown("## Anonymous 🤫"))
+                with gr.Column():
+                    masked_model_names.append(gr.Markdown("## Anonymous 🤫"))
+
+            with gr.Row():
+                chatbots = []
+                with gr.Column():
+                    chatbots.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
+                with gr.Column():
+                    chatbots.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
+
+            with gr.Row():
+                left_resp_vote_btn = gr.Button(value="👈 Model A is better", interactive=False)
+                right_resp_vote_btn = gr.Button(value="👉 Model B is better", interactive=False)
+                resp_vote_btn_list: list[gr.component.Component] = [left_resp_vote_btn, right_resp_vote_btn]
+
+            with gr.Row():
+                energy_comparison_message = gr.Markdown(visible=False)
+
+            with gr.Row():
+                worth_energy_vote_btn = gr.Button(value="The better response was worth the extra energy!", visible=False)
+                notworth_energy_vote_btn = gr.Button(value="Not really.", visible=False)
+                energy_vote_btn_list: list[gr.component.Component] = [worth_energy_vote_btn, notworth_energy_vote_btn]
+
+            with gr.Row():
+                reset_btn = gr.Button("Reset")
+
+            controller_client = gr.State()
+
+            def enable_interact():
+                return [enable_btn_update] * 2
+
+            def disable_interact():
+                return [disable_btn_update] * 2
+
+            def add_prompt_disable_submit(prompt, history_a, history_b):
+                client = global_controller_client.fork()
+                return [
+                    gr.Textbox.update(value=" ", interactive=False),
+                    history_a + [[prompt, ""]],
+                    history_b + [[prompt, ""]],
+                    disable_btn_update,
+                    client,
+                ]
+
+            def generate_responses(client: ControllerClient, history_a, history_b):
+                for resp_a, resp_b in itertools.zip_longest(
+                    client.prompt(prompt=history_a[-1][0], index=0),
+                    client.prompt(prompt=history_b[-1][0], index=1),
+                ):
+                    if resp_a is not None:
+                        history_a[-1][1] += resp_a
+                    if resp_b is not None:
+                        history_b[-1][1] += resp_b
+                    yield [history_a, history_b]
+
+
+            (prompt_input
+                .submit(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, *chatbots, prompt_submit_btn, controller_client], queue=False)
+                .then(generate_responses, [controller_client, *chatbots], [*chatbots], queue=True)
+                .then(enable_interact, None, resp_vote_btn_list, queue=False))
+            (prompt_submit_btn
+                .click(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, *chatbots, prompt_submit_btn, controller_client], queue=False)
+                .then(generate_responses, [controller_client, *chatbots], [*chatbots], queue=True)
+                .then(enable_interact, None, resp_vote_btn_list, queue=False))
+
+            left_resp_vote_btn.click(
+                make_resp_vote_func(0),
+                [controller_client],
+                [*resp_vote_btn_list, *masked_model_names, energy_comparison_message, *energy_vote_btn_list, reset_btn],
+                queue=False,
+            )
+            right_resp_vote_btn.click(
+                make_resp_vote_func(1),
+                [controller_client],
+                [*resp_vote_btn_list, *masked_model_names, energy_comparison_message, *energy_vote_btn_list, reset_btn],
+                queue=False,
+            )
+
+            worth_energy_vote_btn.click(
+                make_energy_vote_func(0),
+                [controller_client],
+                [*masked_model_names, *energy_vote_btn_list, *resp_vote_btn_list, reset_btn],
+                queue=False,
+            )
+            notworth_energy_vote_btn.click(
+                make_energy_vote_func(1),
+                [controller_client],
+                [*masked_model_names, *energy_vote_btn_list, *resp_vote_btn_list, reset_btn],
+                queue=False,
+            )
+
+            # XXX: gr.update(visible=False)?
+            def reset():
+                return [
+                    # Clear chatbot history
+                    None, None,
+                    # Turn on prompt textbox and submit button
+                    gr.Textbox.update(interactive=True), gr.Button.update(interactive=True),
+                    # Mask model names
+                    gr.Markdown.update("## Anonymous 🤫"),
+                    gr.Markdown.update("## Anonymous 🤫"),
+                    # Hide energy vote buttons and message
+                    gr.Button.update(visible=False), gr.Button.update(visible=False), gr.Markdown.update(visible=False),
+                    # Disable reset button
+                    gr.Button.update(interactive=False),
+                ]
+
+            reset_btn.click(
+                reset,
+                None,
+                [*chatbots, prompt_input, prompt_submit_btn, *masked_model_names, *energy_vote_btn_list, energy_comparison_message, reset_btn],
+                queue=False,
+            )
+
         # Tab: Leaderboard.
         with gr.Tab("Leaderboard"):
             with gr.Box():
@@ -504,151 +635,6 @@ with gr.Blocks(css=css) as block:
             # Block: Leaderboard date.
             with gr.Row():
                 gr.HTML(f"<h3 style='color: gray'>Last updated: {current_date}</h3>")
-
-        # Tab: Colosseum.
-        with gr.TabItem("Colosseum⚔️️"):
-            gr.Markdown(open("docs/colosseum.md").read())
-            with gr.Row():
-                with gr.Column(scale=20):
-                    prompt_input = gr.Textbox(
-                        show_label=False,
-                        placeholder="Input prompt and press ENTER"
-                    )
-                with gr.Column(scale=1, min_width=50):
-                    prompt_submit_btn = gr.Button(value="📤", elem_classes=["btn-submit"])
-
-            with gr.Row():
-                masked_model_name = []
-                with gr.Column():
-                    masked_model_name.append(gr.Markdown("## Anonymous 🤫"))
-                with gr.Column():
-                    masked_model_name.append(gr.Markdown("## Anonymous 🤫"))
-
-            with gr.Row():
-                chat_models = []
-                with gr.Column():
-                    chat_models.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
-                with gr.Column():
-                    chat_models.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
-
-            with gr.Row():
-                left_resp_vote_btn = gr.Button(value="👈 Model A is better", interactive=False)
-                right_resp_vote_btn = gr.Button(value="👉 Model B is better", interactive=False)
-                resp_vote_btn_list: list[gr.component.Component] = [left_resp_vote_btn, right_resp_vote_btn]
-
-            with gr.Row():
-                energy_res = gr.Markdown(f"Model inference energy consumption result (J) ", visible=False)
-
-            with gr.Row():
-                left_energy_vote_btn = gr.Button(value="👈  Model A more energy efficient", visible=False)
-                right_energy_vote_btn = gr.Button(value="👉 Model B more energy efficient", visible=False)
-                energy_vote_btn_list: list[gr.component.Component] = [left_energy_vote_btn, right_energy_vote_btn]
-
-            with gr.Row():
-                reset_btn = gr.Button("Reset")
-
-            controller_client = gr.State()
-
-            def enable_interact():
-                return [enable_btn_update] * 2
-
-            def disable_interact():
-                return [disable_btn_update] * 2
-
-            def add_prompt_disable_submit_prepare_client(prompt, history_a, history_b):
-                return [
-                    gr.Textbox.update(value=" ", interactive=False),
-                    history_a + [[prompt, ""]],
-                    history_b + [[prompt, ""]],
-                    disable_btn_update,
-                ]
-
-            def generate_responses(history_a, history_b):
-                client = global_controller_client.fork()
-                for resp_a, resp_b in itertools.zip_longest(
-                    client.prompt(prompt=history_a[-1][0], index=0),
-                    client.prompt(prompt=history_b[-1][0], index=1),
-                ):
-                    if resp_a is not None:
-                        history_a[-1][1] += resp_a
-                    if resp_b is not None:
-                        history_b[-1][1] += resp_b
-                    # XXX: I did not want to create the client like this, but somehow the gr.State
-                    #      object that used to store the client and automatically deepcopy it
-                    #      does not get passed into the `then` event handler. From Chrome DevTools,
-                    #      a wrong instance ID of 0 is stored in dependency.inputs.
-                    yield [client, history_a, history_b]
-
-
-            (prompt_input
-                .submit(add_prompt_disable_submit_prepare_client, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
-                .then(generate_responses, chat_models, [controller_client, *chat_models], queue=True)
-                .then(enable_interact, None, resp_vote_btn_list, queue=False))
-            (prompt_submit_btn
-                .click(add_prompt_disable_submit_prepare_client, [prompt_input, *chat_models], [prompt_input, *chat_models, prompt_submit_btn], queue=False)
-                .then(generate_responses, chat_models, [controller_client, *chat_models], queue=True)
-                .then(enable_interact, None, resp_vote_btn_list, queue=False))
-
-            # (prompt_input
-            #     .submit(add_prompt, [prompt_input, chat_models[0]], [prompt_input , chat_models[0]], queue=False)
-            #     .then(disable_interact, None, [prompt_input, prompt_submit_btn], queue=False)
-            #     .then(make_prompt_gen(0), [controller_client, chat_models[0]], chat_models[0], queue=True)
-            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
-            # (prompt_input
-            #     .submit(add_prompt, [prompt_input, chat_models[1]], [prompt_input , chat_models[1]], queue=False)
-            #     .then(make_prompt_gen(1), [controller_client, chat_models[1]], chat_models[1], queue=True)
-            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
-            # (prompt_submit_btn
-            #     .click(add_prompt,[prompt_input, chat_models[0]], [prompt_input , chat_models[0]], queue=False)
-            #     .then(disable_interact, None, [prompt_input, prompt_submit_btn], queue=False)
-            #     .then(make_prompt_gen(0), [controller_client, chat_models[0]], chat_models[0], queue=True)
-            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
-            # (prompt_submit_btn
-            #     .click(add_prompt,[prompt_input, chat_models[1]], [prompt_input , chat_models[1]], queue=False)
-            #     .then(make_prompt_gen(1), [controller_client, chat_models[1]], chat_models[1], queue=True)
-            #     .then(enable_interact, None, resp_vote_btn_list, queue=False))
-
-            left_resp_vote_btn.click(
-                make_resp_vote_func(0),
-                [controller_client],
-                resp_vote_btn_list + masked_model_name + [energy_res] + energy_vote_btn_list,
-                queue=False,
-            )
-            right_resp_vote_btn.click(
-                make_resp_vote_func(1),
-                [controller_client],
-                resp_vote_btn_list + masked_model_name + [energy_res] + energy_vote_btn_list,
-                queue=False,
-            )
-
-            left_energy_vote_btn.click(
-                make_energy_vote_func(0),
-                [controller_client],
-                masked_model_name + energy_vote_btn_list + resp_vote_btn_list,
-                queue=False,
-            )
-            right_energy_vote_btn.click(
-                make_energy_vote_func(1),
-                [controller_client],
-                masked_model_name + energy_vote_btn_list + resp_vote_btn_list,
-                queue=False,
-            )
-
-            # XXX: gr.update(visible=False)?
-            def reset():
-                return [
-                    # Chatbots
-                    None, None,
-                    # Prompt textbox and submit button
-                    gr.Textbox.update(value=" ", interactive=False),
-            def clear_fn():
-                return [gr.Button.update(visible=False) for _ in range(2)] + [ gr.Markdown.update(visible=False) ]
-
-            components_to_be_cleared = chat_models + masked_model_name
-            (reset_btn
-                .click(lambda: [None] * len(components_to_be_cleared), [], components_to_be_cleared, queue=False)
-                .then(clear_fn, [], energy_vote_btn_list + [energy_res], queue=False)
-                .then(enable_interact, None, [prompt_input, prompt_submit_btn], queue=False))
 
         # Tab: About page.
         with gr.Tab("About"):

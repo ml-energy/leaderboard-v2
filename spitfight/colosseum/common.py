@@ -28,7 +28,7 @@ class ResponseVoteResponse(BaseModel):
 
 class EnergyVoteRequest(BaseModel):
     request_id: str
-    victory_index: Literal[0, 1]
+    is_worth: bool
 
 
 class EnergyVoteResponse(BaseModel):

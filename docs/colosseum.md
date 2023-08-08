@@ -1,4 +1,4 @@
-> Step into the ML.ENERGY Colosseum, where language models duel with intellect, and your judgment tips the scales of victory.
+> Enter the ML.ENERGY Colosseum, where language models duel with intellect, and your judgment tips the scales of victory.
 
 ### Rules of the Colosseum
 

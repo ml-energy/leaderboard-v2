@@ -72,7 +72,7 @@ async def energy_vote(
     request: EnergyVoteRequest,
     controller: Controller = Depends(get_global_controller),
 ):
-    if (state := controller.energy_vote(request.request_id, request.victory_index)) is None:
+    if (state := controller.energy_vote(request.request_id, request.is_worth)) is None:
         raise HTTPException(status_code=410, detail="Colosseum battle session timeout expired.")
     return EnergyVoteResponse(model_names=state.model_names)
 

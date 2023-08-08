@@ -69,9 +69,9 @@ class ControllerClient:
         _check_response(response_vote_request, resp)
         return ResponseVoteResponse(**resp.json())
 
-    def energy_vote(self, victory_index: Literal[0, 1]) -> EnergyVoteResponse:
+    def energy_vote(self, is_worth: bool) -> EnergyVoteResponse:
         """Notify the controller of the user's vote for energy."""
-        energy_vote_request = EnergyVoteRequest(request_id=self.request_id, victory_index=victory_index)
+        energy_vote_request = EnergyVoteRequest(request_id=self.request_id, is_worth=is_worth)
         resp = requests.post(
             f"http://{self.controller_addr}{COLOSSEUM_ENERGY_VOTE_ROUTE}",
             json=energy_vote_request.dict(),
