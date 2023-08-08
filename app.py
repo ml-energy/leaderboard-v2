@@ -7,7 +7,6 @@ import itertools
 import contextlib
 import argparse
 import os
-from copy import deepcopy
 from typing import Literal
 from dateutil import parser, tz
 
@@ -337,71 +336,6 @@ global_controller_client = ControllerClient(controller_addr=controller_addr, tim
 enable_btn_update = gr.Button.update(interactive=True)
 disable_btn_update = gr.Button.update(interactive=False)
 
-# query to controller's models
-# def get_models():
-#     url = controller_addr + "/get_models"
-#     r = requests.post(url)
-#     assert r.status_code == 200
-#     return r.json()
-
-# def return_nlp_voting(choice):
-#     url = controller_addr + "/get_nlp_voting"
-#     data = {
-#         "nlp_voting": choice
-#     }
-#     r = requests.post(url, json=data)
-#
-#     if r.status_code != 200:
-#         raise gr.Error("Failed to talk to our backend. Please try again later.")
-#     return r.json()
-#
-# def return_energy_voting(choice):
-#     url = controller_addr + "/get_energy_voting"
-#     data = {
-#         "energy_voting": choice
-#     }
-#     _ = requests.post(url, json=data)
-#
-# def add_prompt(user_message, history):
-#     return "", history + [[user_message, ""]]
-#
-# def request_response(history, index):
-#     url = f"{controller_addr}/request"
-#     data = {
-#         "prompt": history[-1][0], # system_prompt is on the controller side
-#         "index": index
-#     }
-#     response = requests.post(
-#         url,
-#         json=data,
-#         stream=True,
-#         timeout=WORKER_API_TIMEOUT,
-#     )
-#     return response
-
-# def make_prompt_gen(model_index: Literal[0, 1]):
-#     def prompt_gen(client: ControllerClient, history):
-#         for text in client.prompt(prompt=history[-1][0], index=model_index):
-#             history[-1][1] += text
-#             yield history
-#     return prompt_gen
-
-# def create_get_response_a(history):
-#     response = request_response(history, 0)
-#     for chunk in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
-#         if chunk:
-#             data = json.loads(chunk.decode("utf-8"))
-#             history[-1][1] += data
-#             yield history
-#
-# def create_get_response_b(history):
-#     response = request_response(history, 1)
-#     for chunk in response.iter_lines(decode_unicode=False, delimiter=b"\0"):
-#         if chunk:
-#             data = json.loads(chunk.decode("utf-8"))
-#             history[-1][1] += data
-#             yield history
-
 def save_energy(energy_a, energy_b):
     energy_save = round((1 - energy_a / energy_b) * 100, 2)
     energy_res = f"## The response you chose <font color='green'>save {energy_save}% energy!</font>"
@@ -415,66 +349,29 @@ def cost_energy(energy_a, energy_b):
 def make_resp_vote_func(victory_index: Literal[0, 1]):
     def resp_vote_func(client: ControllerClient):
         vote_response = client.response_vote(victory_index=victory_index)
-        model_name_a, model_name_b = vote_response.model_names
+        model_name_a, model_name_b = map(lambda n: f"## {n}", vote_response.model_names)
         energy_a, energy_b = vote_response.energy_consumptions
         if (victory_index == 0 and energy_a <= energy_b) or (victory_index == 1 and energy_a >= energy_b):
             energy_res = save_energy(energy_a, energy_b)
-            return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a, visible=True), gr.Markdown.update(model_name_b, visible=True), \
+            return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
                     gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=False), \
                     gr.Button.update(visible=True, interactive=False)
 
         else:
             energy_res = cost_energy(energy_a, energy_b)
-            return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
+            return disable_btn_update, disable_btn_update, gr.Markdown.update("## Anonymous 🤫"), gr.Markdown.update("## Anonymous 🤫"), \
                     gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True)
     return resp_vote_func
 
-
-# def leftvote_last_response():
-#     model_name_a, model_name_b, energy_a, energy_b = return_nlp_voting(0)
-#     print(model_name_a, model_name_b, energy_a, energy_b)
-#     if energy_a <= energy_b:
-#         energy_res = save_energy(energy_a, energy_b)
-#         return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a, visible=True), gr.Markdown.update(model_name_b, visible=True), \
-#                 gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=False), \
-#                 gr.Button.update(visible=True, interactive=False)
-#
-#     else:
-#         energy_res = cost_energy(energy_a, energy_b)
-#         return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
-#                 gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True)
-#
-# def rightvote_last_response():
-#     model_name_a, model_name_b, energy_a, energy_b = return_nlp_voting(1)
-#     print(model_name_a, model_name_b, energy_a, energy_b)
-#     if energy_a >= energy_b:
-#         energy_res = save_energy(energy_b, energy_a)
-#         return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a, visible=True), gr.Markdown.update(model_name_b, visible=True), \
-#                 gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=False), \
-#                 gr.Button.update(visible=True, interactive=False)
-#     else:
-#         energy_res = cost_energy(energy_b, energy_a)
-#         return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
-#                 gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True)
-
-
 def make_energy_vote_func(victory_index: Literal[0, 1]):
     def energy_vote_func(client: ControllerClient):
-        client.energy_vote(victory_index=victory_index)
-        return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn_update for _ in range(2)] + [disable_btn_update, disable_btn_update]
+        vote_response = client.energy_vote(victory_index=victory_index)
+        model_name_a, model_name_b = map(lambda n: f"## {n}", vote_response.model_names)
+        return [gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b)] + [disable_btn_update for _ in range(2)] + [disable_btn_update, disable_btn_update]
     return energy_vote_func
 
 
-# def left_energy_vote_last_response():
-#     return_energy_voting(0)
-#     return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn_update for _ in range(2)] + [disable_btn_update, disable_btn_update]
-#
-# def right_energy_vote_last_response():
-#     return_energy_voting(1)
-#     return [gr.Textbox.update(visible=True) for _ in range(2)] + [disable_btn_update for _ in range(2)] + [disable_btn_update, disable_btn_update]
-
-block = gr.Blocks(css=css)
-with block:
+with gr.Blocks(css=css) as block:
     tbm = gr.State(global_tbm)  # type: ignore
     with gr.Box():
         gr.HTML("<h1><a href='https://ml.energy' class='text-logo'>ML.ENERGY</a> Leaderboard</h1>")
@@ -608,10 +505,6 @@ with block:
             with gr.Row():
                 gr.HTML(f"<h3 style='color: gray'>Last updated: {current_date}</h3>")
 
-        # models = get_models()
-        # if len(models) < 2:
-        #     raise gr.Error("Our backend is temporarily down. Please try again later.")
-
         # Tab: Colosseum.
         with gr.TabItem("Colosseum⚔️️"):
             gr.Markdown(open("docs/colosseum.md").read())
@@ -627,16 +520,16 @@ with block:
             with gr.Row():
                 masked_model_name = []
                 with gr.Column():
-                    masked_model_name.append(gr.Markdown(" ", visible=False))
+                    masked_model_name.append(gr.Markdown("## Anonymous 🤫"))
                 with gr.Column():
-                    masked_model_name.append(gr.Markdown(" ", visible=False))
+                    masked_model_name.append(gr.Markdown("## Anonymous 🤫"))
 
             with gr.Row():
                 chat_models = []
                 with gr.Column():
-                    chat_models.append(gr.Chatbot(label="Model A", elem_id="chatbot"))
+                    chat_models.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
                 with gr.Column():
-                    chat_models.append(gr.Chatbot(label="Model B", elem_id="chatbot"))
+                    chat_models.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
 
             with gr.Row():
                 left_resp_vote_btn = gr.Button(value="👈 Model A is better", interactive=False)
@@ -654,24 +547,6 @@ with block:
             with gr.Row():
                 clear = gr.Button("Clear")
 
-            # response_done_counter = gr.State(0)
-            # response_done_lock = gr.State(Lock())
-            #
-            # def notify_response_done_counter(counter: int, lock: Lock):
-            #     """Both models should have completely responded before we enable the voting buttons.
-            #
-            #     An integer counter `response_done_counter` is incremented whenever a model finishes responding.
-            #     When the counter reaches 2, we enable the response voting buttons and reset the counter to 0.
-            #     
-            #     XXX: Sharing locks with gr.State doesn't work. Need to figure out another way.
-            #     """
-            #     with lock:
-            #         counter += 1
-            #         if counter == 2:
-            #             counter = 0
-            #             return [counter, enable_btn_update, enable_btn_update]
-            #         return [counter, disable_btn_update, disable_btn_update]
-
             controller_client = gr.State()
 
             def enable_interact():
@@ -688,15 +563,9 @@ with block:
                     disable_btn_update,
                 ]
 
-            # def generate_responses(history_a, history_b):
-            #     print(f"Send {history_a, history_b} to controller", flush=True)
-            #     return [deepcopy(global_controller_client), history_a, history_b]
-
-
             def generate_responses(history_a, history_b):
-                print(f"Send {history_a, history_b} to controller", flush=True)
-                client = deepcopy(global_controller_client)
-                for resp_a, resp_b in zip(
+                client = global_controller_client.fork()
+                for resp_a, resp_b in itertools.zip_longest(
                     client.prompt(prompt=history_a[-1][0], index=0),
                     client.prompt(prompt=history_b[-1][0], index=1),
                 ):
@@ -704,6 +573,10 @@ with block:
                         history_a[-1][1] += resp_a
                     if resp_b is not None:
                         history_b[-1][1] += resp_b
+                    # XXX: I did not want to create the client like this, but somehow the gr.State
+                    #      object that used to store the client and automatically deepcopy it
+                    #      does not get passed into the `then` event handler. From Chrome DevTools,
+                    #      a wrong instance ID of 0 is stored in dependency.inputs.
                     yield [client, history_a, history_b]
 
 
@@ -788,4 +661,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     block.queue(
         concurrency_count=args.concurrency, status_update_rate=10, api_open=False
-    ).launch(share=args.share, show_error=True, debug=True)
+    ).launch(share=args.share, show_error=True)

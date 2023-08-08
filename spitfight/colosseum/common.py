@@ -28,3 +28,7 @@ class ResponseVoteResponse(BaseModel):
 class EnergyVoteRequest(BaseModel):
     request_id: str
     victory_index: Literal[0, 1]
+
+
+class EnergyVoteResponse(BaseModel):
+    model_names: list[str]

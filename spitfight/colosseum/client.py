@@ -19,6 +19,7 @@ from spitfight.colosseum.common import (
     ResponseVoteRequest,
     ResponseVoteResponse,
     EnergyVoteRequest,
+    EnergyVoteResponse,
 )
 
 
@@ -31,14 +32,14 @@ class ControllerClient:
         self.timeout = timeout
         self.request_id = str(request_id) or str(uuid4())
 
-    def __deepcopy__(self, memo: dict) -> ControllerClient:
-        """Return a deepcopy of the client with a new request ID.
+    def fork(self) -> ControllerClient:
+        """Return a copy of the client with a new request ID.
 
         This exploints the fact that gr.State simply deepcopies objects.
         """
         return ControllerClient(
-            controller_addr=deepcopy(self.controller_addr, memo),
-            timeout=deepcopy(self.timeout, memo),
+            controller_addr=self.controller_addr,
+            timeout=self.timeout,
             request_id=uuid4(),
         )
 
@@ -68,7 +69,7 @@ class ControllerClient:
         _check_response(response_vote_request, resp)
         return ResponseVoteResponse(**resp.json())
 
-    def energy_vote(self, victory_index: Literal[0, 1]) -> None:
+    def energy_vote(self, victory_index: Literal[0, 1]) -> EnergyVoteResponse:
         """Notify the controller of the user's vote for energy."""
         energy_vote_request = EnergyVoteRequest(request_id=self.request_id, victory_index=victory_index)
         resp = requests.post(
@@ -76,6 +77,7 @@ class ControllerClient:
             json=energy_vote_request.dict(),
         )
         _check_response(energy_vote_request, resp)
+        return EnergyVoteResponse(**resp.json())
 
 
 @contextlib.contextmanager
