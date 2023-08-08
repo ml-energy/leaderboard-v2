@@ -545,7 +545,7 @@ with gr.Blocks(css=css) as block:
                 energy_vote_btn_list: list[gr.component.Component] = [left_energy_vote_btn, right_energy_vote_btn]
 
             with gr.Row():
-                clear = gr.Button("Clear")
+                reset_btn = gr.Button("Reset")
 
             controller_client = gr.State()
 
@@ -635,11 +635,17 @@ with gr.Blocks(css=css) as block:
             )
 
             # XXX: gr.update(visible=False)?
+            def reset():
+                return [
+                    # Chatbots
+                    None, None,
+                    # Prompt textbox and submit button
+                    gr.Textbox.update(value=" ", interactive=False),
             def clear_fn():
                 return [gr.Button.update(visible=False) for _ in range(2)] + [ gr.Markdown.update(visible=False) ]
 
             components_to_be_cleared = chat_models + masked_model_name
-            (clear
+            (reset_btn
                 .click(lambda: [None] * len(components_to_be_cleared), [], components_to_be_cleared, queue=False)
                 .then(clear_fn, [], energy_vote_btn_list + [energy_res], queue=False)
                 .then(enable_interact, None, [prompt_input, prompt_submit_btn], queue=False))

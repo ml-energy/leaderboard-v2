@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
 from pytz import timezone
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, Field
 from text_generation.errors import OverloadedError, ValidationError
 from fastapi.exceptions import HTTPException
 
@@ -53,20 +53,20 @@ class RequestState(BaseModel):
     energy_victory_index: Optional[Literal[0, 1]] = None
 
     # The time when the user's stage changed.
-    _timestamp: datetime = PrivateAttr(default_factory=now)
+    timestamp: datetime = Field(default_factory=now)
     # The user's current stage.
-    _user_stage: UserStage = PrivateAttr(default="prompted")
+    user_stage: UserStage = "prompted"
     # When the the user is not going through the aforementioned stages,
     # the user's stage transition is recorded here.
-    _abnormal_stage_change: list[tuple[UserStage, UserStage]] = PrivateAttr(default_factory=list)
+    abnormal_stage_change: list[tuple[UserStage, UserStage]] = []
 
     def set_response_and_energy(self, model_index: Literal[0, 1], response: str, energy_consumption: float) -> None:
-        self._timestamp = now()
+        self.timestamp = now()
         self.energy_consumptions[model_index] = energy_consumption
         self.responses[model_index] = response
 
     def set_response_vote(self, victory_index: Literal[0, 1]) -> None:
-        self._timestamp = now()
+        self.timestamp = now()
 
         # Next stage depends on the user's vote.
         energy_a, energy_b = self.energy_consumptions
@@ -76,20 +76,20 @@ class RequestState(BaseModel):
             next_stage = "chose_more_energy_response"
 
         # Detect abnormal stage change.
-        if self._user_stage != "prompted":
-            self._abnormal_stage_change.append((self._user_stage, next_stage))
+        if self.user_stage != "prompted":
+            self.abnormal_stage_change.append((self.user_stage, next_stage))
 
-        self._user_stage = next_stage
+        self.user_stage = next_stage
         self.response_victory_index = victory_index
 
     def set_energy_vote(self, victory_index: Literal[0, 1]) -> None:
-        self._timestamp = now()
+        self.timestamp = now()
 
         # Detect abnormal stage change.
-        if self._user_stage != "chose_more_energy_response":
-            self._abnormal_stage_change.append((self._user_stage, "voted_energy"))
+        if self.user_stage != "chose_more_energy_response":
+            self.abnormal_stage_change.append((self.user_stage, "voted_energy"))
 
-        self._user_stage = "voted_energy"
+        self.user_stage = "voted_energy"
         self.energy_victory_index = victory_index
 
 
