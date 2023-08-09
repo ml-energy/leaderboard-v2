@@ -419,7 +419,7 @@ def make_resp_vote_func(victory_index: Literal[0, 1]):
                 # Keep energy vote buttons hidden
                 gr.Button.update(visible=False, interactive=False), gr.Button.update(visible=False, interactive=False),
                 # Enable reset button
-                gr.Button.update(interactive=True),
+                gr.Button.update(visible=True, interactive=True),
             ]
         # User liked the model that consumed more energy.
         else:
@@ -434,7 +434,7 @@ def make_resp_vote_func(victory_index: Literal[0, 1]):
                 # Reveal and enable energy vote buttons
                 gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True),
                 # Keep the reset button disabled
-                gr.Button.update(interactive=False, visible=False),
+                gr.Button.update(visible=False, interactive=False),
             ]
     return resp_vote_func
 
