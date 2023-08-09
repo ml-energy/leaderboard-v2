@@ -283,7 +283,7 @@ function format_model_link() {{
 """
 
 # Custom CSS.
-css = """
+custom_css = """
 /* Make ML.ENERGY look like a clickable logo. */
 .text-logo {
     color: #23d175 !important;
@@ -314,6 +314,14 @@ table th:first-child {
 .tab-nav > button {
     font-size: 18px !important;
 }
+
+/* Color texts. */
+.green-text {
+    color: #23d175 !important;
+}
+.red-text {
+    color: #ff3860 !important;
+}
 """
 
 intro_text = """
@@ -331,78 +339,189 @@ Every benchmark is limited in some sense -- Before you interpret the results, pl
 controller_addr = os.environ["COLOSSEUM_CONTROLLER_ADDR"]
 global_controller_client = ControllerClient(controller_addr=controller_addr, timeout=15)
 
-# Caching frequently used Component update dictionaries.
-# XXX: Does gr.update(interactive=True) work?
-enable_btn_update = gr.Button.update(interactive=True)
-disable_btn_update = gr.Button.update(interactive=False)
+ANONYMOUS_MODEL_TEXT = "## Anonymous 🤫"
 
-def save_energy(energy_a, energy_b):
-    energy_save = round((1 - energy_a / energy_b) * 100, 2)
-    energy_res = f"## The response you chose <font color='green'>save {energy_save}% energy!</font>"
-    return  energy_res
+# Colosseum helper functions.
+def enable_interact():
+    return [gr.update(interactive=True)] * 2
 
-def cost_energy(energy_a, energy_b):
-    energy_cost = round((energy_a / energy_b - 1) * 100, 2)
-    energy_res = f"## The response you chose <font color='red'>cost {energy_cost}% more energy!</font>"
-    return energy_res
+def disable_interact():
+    return [gr.update(interactive=False)] * 2
+
+def consumed_less_energy_message(energy_a, energy_b):
+    """Retuen a message that indicates that the user chose the model that consumed less energy.
+
+    By default report in "%f %" but if the difference is larger than 2 times, report in "%f X".
+    """
+    less_energy = min(energy_a, energy_b)
+    more_energy = max(energy_a, energy_b)
+    factor = less_energy / more_energy
+    if factor <= 0.5:
+        message = f"<h2>That response also <span class='green-text'>consumed {1/factor:.1f}X less energy</span>!</h2>"
+    else:
+        message = f"<h2>That response also <span class='green-text'>consumed {100 - factor * 100:.1f}% less energy</span>!</h2>"
+    return message
+
+def consumed_more_energy_message(energy_a, energy_b):
+    """Retuen a message that indicates that the user chose the model that consumed more energy.
+
+    By default report in "%f %" but if the difference is larger than 2 times, report in "%f X".
+    """
+    less_energy = min(energy_a, energy_b)
+    more_energy = max(energy_a, energy_b)
+    factor = more_energy / less_energy
+    if factor >= 2.0:
+        message = f"<h2>That response <span class='red-text'>consumed {factor:.1f}x more energy.</span></h2>"
+    else:
+        message = f"<h2>That response <span class='red-text'>consumed {factor * 100 - 100:.1f}% more energy.</span></h2>"
+    return message
+
+# Colosseum event handlers
+def add_prompt_disable_submit(prompt, history_a, history_b):
+    """Add the user's prompt to the two model's history and disable the submit button."""
+    client = global_controller_client.fork()
+    return [
+        gr.Textbox.update(value=" ", interactive=False),
+        history_a + [[prompt, ""]],
+        history_b + [[prompt, ""]],
+        gr.Button.update(interactive=False),
+        client,
+    ]
+
+def generate_responses(client: ControllerClient, history_a, history_b):
+    """Generate responses for the two models."""
+    for resp_a, resp_b in itertools.zip_longest(
+        client.prompt(prompt=history_a[-1][0], index=0),
+        client.prompt(prompt=history_b[-1][0], index=1),
+    ):
+        if resp_a is not None:
+            history_a[-1][1] += resp_a
+        if resp_b is not None:
+            history_b[-1][1] += resp_b
+        yield [history_a, history_b]
 
 def make_resp_vote_func(victory_index: Literal[0, 1]):
+    """Return a function that will be called when the user clicks on response preference vote buttons."""
     def resp_vote_func(client: ControllerClient):
         vote_response = client.response_vote(victory_index=victory_index)
         model_name_a, model_name_b = map(lambda n: f"## {n}", vote_response.model_names)
         energy_a, energy_b = vote_response.energy_consumptions
         # User liked the model that also consumed less energy.
         if (victory_index == 0 and energy_a <= energy_b) or (victory_index == 1 and energy_a >= energy_b):
-            energy_res = save_energy(energy_a, energy_b)
-            return disable_btn_update, disable_btn_update, gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b), \
-                    gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=False, interactive=False), \
-                    gr.Button.update(visible=False, interactive=False), gr.update(interactive=True)
-        # User like the model that consumed more energy.
+            energy_message = consumed_less_energy_message(energy_a, energy_b)
+            return [
+                # Disable response vote buttons
+                gr.Button.update(interactive=False), gr.Button.update(interactive=False),
+                # Reveal model names
+                gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b),
+                # Display energy consumption comparison message
+                gr.Markdown.update(energy_message, visible=True),
+                # Keep energy vote buttons hidden
+                gr.Button.update(visible=False, interactive=False), gr.Button.update(visible=False, interactive=False),
+                # Enable reset button
+                gr.Button.update(interactive=True),
+            ]
+        # User liked the model that consumed more energy.
         else:
-            energy_res = cost_energy(energy_a, energy_b)
-            return disable_btn_update, disable_btn_update, gr.Markdown.update("## Anonymous 🤫"), gr.Markdown.update("## Anonymous 🤫"), \
-                    gr.Markdown.update(energy_res, visible=True), gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True), gr.update(interactive=False)
+            energy_message = consumed_more_energy_message(energy_a, energy_b)
+            return [
+                # Disable response vote buttons
+                gr.Button.update(interactive=False), gr.Button.update(interactive=False),
+                # Leave model names hidden
+                gr.Markdown.update(ANONYMOUS_MODEL_TEXT), gr.Markdown.update(ANONYMOUS_MODEL_TEXT),
+                # Display energy consumption comparison message
+                gr.Markdown.update(energy_message, visible=True),
+                # Reveal and enable energy vote buttons
+                gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True),
+                # Keep the reset button disabled
+                gr.Button.update(interactive=False),
+            ]
     return resp_vote_func
 
 def make_energy_vote_func(is_worth: bool):
-    def energy_vote_func(client: ControllerClient):
+    """Return a function that will be called when the user clicks on energy vote buttons."""
+    def energy_vote_func(client: ControllerClient, energy_message: str):
         vote_response = client.energy_vote(is_worth=is_worth)
         model_name_a, model_name_b = map(lambda n: f"## {n}", vote_response.model_names)
-        return [gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b)] + [disable_btn_update for _ in range(2)] + [disable_btn_update, disable_btn_update, gr.update(interactive=True)]
+        return [
+            # Reveal model names
+            gr.Markdown.update(model_name_a), gr.Markdown.update(model_name_b),
+            # Disable energy vote buttons
+            gr.Button.update(interactive=False), gr.Button.update(interactive=False),
+            # Enable reset button
+            gr.Button.update(interactive=True),
+            # Append to the energy comparison message
+            energy_message[:-5] + (" Fair enough.</h2>" if is_worth else " Wasn't worth it.</h2>"),
+        ]
     return energy_vote_func
 
+def play_again():
+    return [
+        # Clear chatbot history
+        None, None,
+        # Turn on prompt textbox and submit button
+        gr.Textbox.update(value="", interactive=True), gr.Button.update(interactive=True),
+        # Mask model names
+        gr.Markdown.update(ANONYMOUS_MODEL_TEXT),
+        gr.Markdown.update(ANONYMOUS_MODEL_TEXT),
+        # Hide energy vote buttons and message
+        gr.Button.update(visible=False), gr.Button.update(visible=False), gr.Markdown.update(visible=False),
+        # Disable reset button
+        gr.Button.update(interactive=False),
+    ]
 
-with gr.Blocks(css=css) as block:
+focus_prompt_input_js = """
+function() {
+    for (let textarea of document.getElementsByTagName("textarea")) {
+        if (textarea.hasAttribute("autofocus")) {
+            textarea.focus();
+            console.log("Focused prompt input");
+            return;
+        }
+    }
+}
+"""
+
+with gr.Blocks(css=custom_css) as block:
     tbm = gr.State(global_tbm)  # type: ignore
     with gr.Box():
         gr.HTML("<h1><a href='https://ml.energy' class='text-logo'>ML.ENERGY</a> Leaderboard</h1>")
 
     with gr.Tabs():
         # Tab: Colosseum.
-        with gr.TabItem("Colosseum⚔️️"):
-            gr.Markdown(open("docs/colosseum.md").read())
-            with gr.Row():
-                with gr.Column(scale=20):
+        with gr.TabItem("Colosseum ⚔️️"):
+            gr.Markdown(open("docs/colosseum_rules.md").read())
+
+            with gr.Group():
+                with gr.Row():
                     prompt_input = gr.Textbox(
                         show_label=False,
-                        placeholder="Input prompt and press ENTER"
+                        placeholder="Type your prompt and press ENTER",
+                        autofocus=True,
+                        container=False,
+                        scale=20,
+                        elem_id="prompt-textarea",
                     )
-                with gr.Column(scale=1, min_width=60):
-                    prompt_submit_btn = gr.Button(value="📤\nFight!", elem_classes=["btn-submit"])
+                    prompt_submit_btn = gr.Button(
+                        value="⚔️️ Fight!",
+                        elem_classes=["btn-submit"],
+                        min_width=60,
+                        scale=1,
+                    )
 
             with gr.Row():
                 masked_model_names = []
                 with gr.Column():
-                    masked_model_names.append(gr.Markdown("## Anonymous 🤫"))
+                    masked_model_names.append(gr.Markdown(ANONYMOUS_MODEL_TEXT))
                 with gr.Column():
-                    masked_model_names.append(gr.Markdown("## Anonymous 🤫"))
+                    masked_model_names.append(gr.Markdown(ANONYMOUS_MODEL_TEXT))
 
             with gr.Row():
                 chatbots = []
                 with gr.Column():
-                    chatbots.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
+                    chatbots.append(gr.Chatbot(label="Model A", elem_id="chatbot", height=600))
                 with gr.Column():
-                    chatbots.append(gr.Chatbot(elem_id="chatbot", container=False, height=600))
+                    chatbots.append(gr.Chatbot(label="Model B", elem_id="chatbot", height=600))
 
             with gr.Row():
                 left_resp_vote_btn = gr.Button(value="👈 Model A is better", interactive=False)
@@ -410,44 +529,19 @@ with gr.Blocks(css=css) as block:
                 resp_vote_btn_list: list[gr.component.Component] = [left_resp_vote_btn, right_resp_vote_btn]
 
             with gr.Row():
-                energy_comparison_message = gr.Markdown(visible=False)
+                energy_comparison_message = gr.HTML(visible=False)
 
             with gr.Row():
-                worth_energy_vote_btn = gr.Button(value="The better response was worth the extra energy!", visible=False)
+                worth_energy_vote_btn = gr.Button(value="The better response was worth the extra energy.", visible=False)
                 notworth_energy_vote_btn = gr.Button(value="Not really.", visible=False)
                 energy_vote_btn_list: list[gr.component.Component] = [worth_energy_vote_btn, notworth_energy_vote_btn]
 
             with gr.Row():
-                reset_btn = gr.Button("Reset")
+                play_again_btn = gr.Button("Play again!")
+
+            gr.Markdown(open("docs/colosseum_terms.md").read())
 
             controller_client = gr.State()
-
-            def enable_interact():
-                return [enable_btn_update] * 2
-
-            def disable_interact():
-                return [disable_btn_update] * 2
-
-            def add_prompt_disable_submit(prompt, history_a, history_b):
-                client = global_controller_client.fork()
-                return [
-                    gr.Textbox.update(value=" ", interactive=False),
-                    history_a + [[prompt, ""]],
-                    history_b + [[prompt, ""]],
-                    disable_btn_update,
-                    client,
-                ]
-
-            def generate_responses(client: ControllerClient, history_a, history_b):
-                for resp_a, resp_b in itertools.zip_longest(
-                    client.prompt(prompt=history_a[-1][0], index=0),
-                    client.prompt(prompt=history_b[-1][0], index=1),
-                ):
-                    if resp_a is not None:
-                        history_a[-1][1] += resp_a
-                    if resp_b is not None:
-                        history_b[-1][1] += resp_b
-                    yield [history_a, history_b]
 
 
             (prompt_input
@@ -460,53 +554,40 @@ with gr.Blocks(css=css) as block:
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
 
             left_resp_vote_btn.click(
-                make_resp_vote_func(0),
+                make_resp_vote_func(victory_index=0),
                 [controller_client],
-                [*resp_vote_btn_list, *masked_model_names, energy_comparison_message, *energy_vote_btn_list, reset_btn],
+                [*resp_vote_btn_list, *masked_model_names, energy_comparison_message, *energy_vote_btn_list, play_again_btn],
                 queue=False,
             )
             right_resp_vote_btn.click(
-                make_resp_vote_func(1),
+                make_resp_vote_func(victory_index=1),
                 [controller_client],
-                [*resp_vote_btn_list, *masked_model_names, energy_comparison_message, *energy_vote_btn_list, reset_btn],
+                [*resp_vote_btn_list, *masked_model_names, energy_comparison_message, *energy_vote_btn_list, play_again_btn],
                 queue=False,
             )
 
             worth_energy_vote_btn.click(
-                make_energy_vote_func(0),
-                [controller_client],
-                [*masked_model_names, *energy_vote_btn_list, *resp_vote_btn_list, reset_btn],
+                make_energy_vote_func(is_worth=True),
+                [controller_client, energy_comparison_message],
+                [*masked_model_names, *energy_vote_btn_list, play_again_btn, energy_comparison_message],
                 queue=False,
             )
             notworth_energy_vote_btn.click(
-                make_energy_vote_func(1),
-                [controller_client],
-                [*masked_model_names, *energy_vote_btn_list, *resp_vote_btn_list, reset_btn],
+                make_energy_vote_func(is_worth=False),
+                [controller_client, energy_comparison_message],
+                [*masked_model_names, *energy_vote_btn_list, play_again_btn, energy_comparison_message],
                 queue=False,
             )
 
-            # XXX: gr.update(visible=False)?
-            def reset():
-                return [
-                    # Clear chatbot history
-                    None, None,
-                    # Turn on prompt textbox and submit button
-                    gr.Textbox.update(interactive=True), gr.Button.update(interactive=True),
-                    # Mask model names
-                    gr.Markdown.update("## Anonymous 🤫"),
-                    gr.Markdown.update("## Anonymous 🤫"),
-                    # Hide energy vote buttons and message
-                    gr.Button.update(visible=False), gr.Button.update(visible=False), gr.Markdown.update(visible=False),
-                    # Disable reset button
-                    gr.Button.update(interactive=False),
-                ]
+            (play_again_btn
+                .click(
+                    play_again,
+                    None,
+                    [*chatbots, prompt_input, prompt_submit_btn, *masked_model_names, *energy_vote_btn_list, energy_comparison_message, play_again_btn],
+                    queue=False,
+                )
+                .then(None, _js=focus_prompt_input_js, queue=False))
 
-            reset_btn.click(
-                reset,
-                None,
-                [*chatbots, prompt_input, prompt_submit_btn, *masked_model_names, *energy_vote_btn_list, energy_comparison_message, reset_btn],
-                queue=False,
-            )
 
         # Tab: Leaderboard.
         with gr.Tab("Leaderboard"):
