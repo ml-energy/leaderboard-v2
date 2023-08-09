@@ -35,7 +35,7 @@ def init_queued_root_logger(
     logger.addHandler(queue_handler)
 
     formatter = logging.Formatter(
-        "[%(asctime)s] [%(name)s](%(filename)s:%(lineno)d) %(message)s"
+        "[%(asctime)s] [%(levelname)s] [%(name)s](%(filename)s:%(lineno)d) %(message)s"
     )
 
     stderr_handler = logging.StreamHandler()

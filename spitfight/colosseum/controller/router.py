@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
 from text_generation.errors import OverloadedError, ValidationError
 
-from spitfight.log import init_queued_root_logger, shutdown_queued_root_loggers
+from spitfight.log import get_logger, init_queued_root_logger, shutdown_queued_root_loggers
 from spitfight.colosseum.common import (
     COLOSSEUM_PROMPT_ROUTE,
     COLOSSEUM_RESP_VOTE_ROUTE,
@@ -38,6 +38,7 @@ class ControllerConfig(BaseConfig):
 
 app = FastAPI()
 settings = ControllerConfig()
+logger = get_logger("spitfight.colosseum.controller.router")
 
 @app.on_event("startup")
 async def startup_event():
@@ -62,8 +63,11 @@ async def prompt(
     try:
         first_token = await generator.__anext__()
     except OverloadedError:
+        name = controller.request_states[request.request_id].model_names[request.model_index]
+        logger.warning("Model %s is overloaded. Failed request: %s", name, repr(request))
         raise HTTPException(status_code=429, detail="Model overloaded. Pleaes try again later.")
     except ValidationError as e:
+        logger.info("TGI returned validation error: %s. Failed request: %s", str(e), repr(request))
         raise HTTPException(status_code=422, detail=str(e))
 
     return StreamingResponse(prepend_generator(first_token, generator))

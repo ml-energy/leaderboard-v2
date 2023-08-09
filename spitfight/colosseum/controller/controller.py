@@ -7,8 +7,6 @@ from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
 from pytz import timezone
 from pydantic import BaseModel, Field
-from text_generation.errors import OverloadedError, ValidationError
-from fastapi.exceptions import HTTPException
 
 from spitfight.log import get_logger
 from spitfight.utils import BoundedExpiringDict
