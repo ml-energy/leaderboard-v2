@@ -15,13 +15,14 @@ Controller:
   - Now, when the controller experiences a connection error, it immediately deactivates the worker. Then, the heartbeat task will periodically wake up and see if the dead TGI server is back up, and reinstate its worker state.
 
 Gradio app:
-- Some event listeners that didn't have to do with the online serving part (e.g., the leaderboard table) were lacking `queue=False`
+- Added `queue=False` to event listeners that are not related to the Colosseum.
 - Excessive code repetition due to the parallel structure of left and right votes
 - Vote buttons being enabled after one model is done, instead of both models being done
 - When the user clicks submit or presses enter, two parallel event handlers are launched. This made two things difficult: (1) removing the user's prompt from the input box (i.e., modifying the `TextBox` component) is a race condition that wasn't being handled (Until now there was only one user testing the app and the two initial handlers managed to both read the prompt, but when load increases, the handler that ran late may see an empty prompt text box because another handler deleted its content.) (2) enabling the response vote buttons only after both the models are done responding.
   - Ref: https://github.com/gradio-app/gradio/issues/3908
   - I consolidated generating the responses of two models into one event handler.
-
+- The wordings of the final energy question changed. Now, it asks whether better response quality was worth the increase in energy consumption. I thought asking which model is more energy efficient could be confusing. I don't think there is a very obvious and unique definition of energy efficiency in our context.
+- Autofocus the prompt textarea on reset.
 
 Miscellaneous notes:
 - I tried to see if I can write a Docker Compose file and deploy it with our Swarm cluster with `docker stack deploy`, but I wasn't able to get it working within a reasonable amount of time. GPUs being involved was the primary pain. So I just gave up and manually set up our stuff.
