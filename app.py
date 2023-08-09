@@ -434,7 +434,7 @@ def make_resp_vote_func(victory_index: Literal[0, 1]):
                 # Reveal and enable energy vote buttons
                 gr.Button.update(visible=True, interactive=True), gr.Button.update(visible=True, interactive=True),
                 # Keep the reset button disabled
-                gr.Button.update(interactive=False),
+                gr.Button.update(interactive=False, visible=False),
             ]
     return resp_vote_func
 
@@ -449,7 +449,7 @@ def make_energy_vote_func(is_worth: bool):
             # Disable energy vote buttons
             gr.Button.update(interactive=False), gr.Button.update(interactive=False),
             # Enable reset button
-            gr.Button.update(interactive=True),
+            gr.Button.update(interactive=True, visible=True),
             # Append to the energy comparison message
             energy_message[:-5] + (" Fair enough.</h2>" if is_worth else " Wasn't worth it.</h2>"),
         ]
@@ -467,7 +467,7 @@ def play_again():
         # Hide energy vote buttons and message
         gr.Button.update(visible=False), gr.Button.update(visible=False), gr.Markdown.update(visible=False),
         # Disable reset button
-        gr.Button.update(interactive=False),
+        gr.Button.update(interactive=False, visible=False),
     ]
 
 focus_prompt_input_js = """
@@ -536,7 +536,7 @@ with gr.Blocks(css=custom_css) as block:
                 energy_vote_btn_list: list[gr.component.Component] = [worth_energy_vote_btn, notworth_energy_vote_btn]
 
             with gr.Row():
-                play_again_btn = gr.Button("Play again!")
+                play_again_btn = gr.Button("Play again!", visible=False)
 
             gr.Markdown(open("docs/colosseum_bottom.md").read())
 
