@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import heapq
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, AsyncGenerator
 
 K = TypeVar('K')
 V = TypeVar('V')
@@ -58,3 +58,16 @@ class BoundedExpiringDict(Generic[K, V]):
         while (self.timestamp_heap and self.timestamp_heap[0][0] < threshold) or len(self.data_dict) > self.max_size:
             _, key = heapq.heappop(self.timestamp_heap)
             del self.data_dict[key]
+
+
+T = TypeVar("T")
+
+
+async def prepend_generator(
+    first_item: T,
+    generator: AsyncGenerator[T, None],
+) -> AsyncGenerator[T, None]:
+    """Prepend an item to an async generator."""
+    yield first_item
+    async for item in generator:
+        yield item

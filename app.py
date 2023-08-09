@@ -382,9 +382,9 @@ def add_prompt_disable_submit(prompt, history_a, history_b):
     client = global_controller_client.fork()
     return [
         gr.Textbox.update(value=" ", interactive=False),
+        gr.Button.update(interactive=False),
         history_a + [[prompt, ""]],
         history_b + [[prompt, ""]],
-        gr.Button.update(interactive=False),
         client,
     ]
 
@@ -475,7 +475,6 @@ function() {
     for (let textarea of document.getElementsByTagName("textarea")) {
         if (textarea.hasAttribute("autofocus")) {
             textarea.focus();
-            console.log("Focused prompt input");
             return;
         }
     }
@@ -490,7 +489,7 @@ with gr.Blocks(css=custom_css) as block:
     with gr.Tabs():
         # Tab: Colosseum.
         with gr.TabItem("Colosseum ⚔️️"):
-            gr.Markdown(open("docs/colosseum_rules.md").read())
+            gr.Markdown(open("docs/colosseum_top.md").read())
 
             with gr.Group():
                 with gr.Row():
@@ -539,17 +538,17 @@ with gr.Blocks(css=custom_css) as block:
             with gr.Row():
                 play_again_btn = gr.Button("Play again!")
 
-            gr.Markdown(open("docs/colosseum_terms.md").read())
+            gr.Markdown(open("docs/colosseum_bottom.md").read())
 
             controller_client = gr.State()
 
 
             (prompt_input
-                .submit(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, *chatbots, prompt_submit_btn, controller_client], queue=False)
+                .submit(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, prompt_submit_btn, *chatbots, controller_client], queue=False)
                 .then(generate_responses, [controller_client, *chatbots], [*chatbots], queue=True)
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
             (prompt_submit_btn
-                .click(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, *chatbots, prompt_submit_btn, controller_client], queue=False)
+                .click(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, prompt_submit_btn, *chatbots, controller_client], queue=False)
                 .then(generate_responses, [controller_client, *chatbots], [*chatbots], queue=True)
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
 

@@ -114,7 +114,7 @@ class WorkerService:
             if worker.model_name == model_name:
                 if worker.status == "down":
                     # This is an unfortunate case where, when the two models were chosen,
-                    # both workers were up, but one of them went down before the request
+                    # the worker was up, but after that went down before the request
                     # completed. We'll just raise a 500 internal error and have the user
                     # try again. This won't be common.
                     raise RuntimeError(f"The worker with model name {model_name} is down.")

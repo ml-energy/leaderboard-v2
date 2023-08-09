@@ -2,6 +2,7 @@ from pydantic import BaseConfig
 from fastapi import FastAPI, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
+from text_generation.errors import OverloadedError, ValidationError
 
 from spitfight.log import init_queued_root_logger, shutdown_queued_root_loggers
 from spitfight.colosseum.common import (
@@ -20,6 +21,7 @@ from spitfight.colosseum.controller.controller import (
     init_global_controller,
     get_global_controller,
 )
+from spitfight.utils import prepend_generator
 
 
 class ControllerConfig(BaseConfig):
@@ -53,9 +55,17 @@ async def prompt(
     request: PromptRequest,
     controller: Controller = Depends(get_global_controller),
 ):
-    return StreamingResponse(
-        controller.prompt(request.request_id, request.prompt, request.model_index)
-    )
+    generator = controller.prompt(request.request_id, request.prompt, request.model_index)
+
+    # First try to get the first token in order to catch TGI errors.
+    try:
+        first_token = await generator.__anext__()
+    except OverloadedError:
+        raise HTTPException(status_code=429, detail="Model overloaded. Pleaes try again later.")
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return StreamingResponse(prepend_generator(first_token, generator))
 
 @app.post(COLOSSEUM_RESP_VOTE_ROUTE, response_model=ResponseVoteResponse)
 async def response_vote(

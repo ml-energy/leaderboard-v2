@@ -176,25 +176,13 @@ class Controller:
         response = ""
         energy = 0.0
         client = worker.get_client()
-        try:
-            async for resp in client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
-                # Even special tokens consume energy when they're generated.
-                energy += resp.token.energy
-                if not resp.token.special:
-                    response += resp.token.text
-                    yield json.dumps(resp.token.text).encode() + b"\0"
-        except OverloadedError:
-            # TODO: Define controller errors in spitfight.colosseum.controller.errors.
-            # XXX: This is not well-handled by FastAPI, because it already started the
-            #      streaming response. One workaround would be to try to get just the
-            #      first token separately, and if that fails, return a 429. Or, we just
-            #      roughly check input length (without being precise) before even going
-            #      to TGI.
-            raise HTTPException(status_code=429, detail="Model overloaded. Pleaes try again later.")
-        except ValidationError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+        async for resp in client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
+            # Even special tokens consume energy when they're generated.
+            energy += resp.token.energy
+            if not resp.token.special:
+                response += resp.token.text
+                yield json.dumps(resp.token.text).encode() + b"\0"
 
-        # XXX: This part could be done in the background with BackgroundTasks.
         request_state.set_response_and_energy(model_index, response, energy)
         request_logger.info(request_state.json())
 
