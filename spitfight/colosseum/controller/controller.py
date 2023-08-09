@@ -192,6 +192,11 @@ class Controller:
 
             # Stop tokens usually don't overlap with (human-readable) stop sequences.
             if resp.token.special or resp.token.id in stop_token_ids:
+                # If the buffer is not empty (i.e., we had partial stop_str matches),
+                # yield it to the user.
+                if buffer:
+                    response += buffer
+                    yield json.dumps(buffer).encode() + b"\0"
                 break
 
             # Giving TGI `stop_sequences` will still generate the entire `stop_str`.
