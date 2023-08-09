@@ -29,14 +29,24 @@ from spitfight.utils import prepend_generator
 
 class ControllerConfig(BaseSettings):
     """Controller settings automatically loaded from environment variables."""
-    max_new_tokens: int = 512
+    # Controller
     background_task_interval: int = 300
     max_num_req_states: int = 10000
     req_state_expiration_time: int = 600
     deployment_yaml: str = "deployment.yaml"
+
+    # Logging
     controller_log_file: str = "controller.log"
     request_log_file: str = "requests.log"
     uvicorn_log_file: str = "uvicorn.log"
+
+    # Generation
+    max_new_tokens: int = 512
+    do_sample: bool = True
+    temperature: float = 0.7
+    repetition_penalty: float = 1.0
+    top_k: int = 50
+    top_p: float = 0.95
 
 
 app = FastAPI()

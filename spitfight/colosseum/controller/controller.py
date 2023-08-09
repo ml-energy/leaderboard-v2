@@ -91,20 +91,31 @@ class RequestState(BaseModel):
         self.extra_energy_was_worth = is_worth
 
 
+class GenerationConfig(BaseModel):
+    """Configuration for generation of prompts."""
+    max_new_tokens: int
+    do_sample: bool
+    temperature: float
+    repetition_penalty: float
+    top_k: int
+    top_p: float
+
+
 class Controller:
     def __init__(
         self,
-        max_new_tokens: int,
         background_task_interval: int,
         max_num_req_states: int,
         req_state_expiration_time: int,
         worker_service: WorkerService,
+        generation_config: GenerationConfig,
     ):
-        self.max_new_tokens = max_new_tokens
         self.max_num_req_states = max_num_req_states
         self.request_states: BoundedExpiringDict[str, RequestState] = \
             BoundedExpiringDict(req_state_expiration_time)
         self.worker_service = worker_service
+
+        self.generation_config = generation_config
 
         self.background_task_handle = asyncio.create_task(
             self._background_task(background_task_interval),
@@ -187,8 +198,8 @@ class Controller:
         buffer = ""
         async for resp in client.generate_stream(
             prompt=prompt,
-            max_new_tokens=self.max_new_tokens,
             stop_sequences=[stop_str] if stop_str is not None else None,
+            **self.generation_config.dict(),
         ):
             # Even special tokens consume energy when they're generated.
             energy += resp.token.energy
@@ -244,11 +255,18 @@ CONTROLLER: Controller | None = None
 def init_global_controller(config: ControllerConfig) -> None:
     global CONTROLLER
     CONTROLLER = Controller(
-        max_new_tokens=config.max_new_tokens,
         background_task_interval=config.background_task_interval,
         max_num_req_states=config.max_num_req_states,
         req_state_expiration_time=config.req_state_expiration_time,
-        worker_service=WorkerService(config.deployment_yaml)
+        worker_service=WorkerService(config.deployment_yaml),
+        generation_config=GenerationConfig(
+            max_new_tokens=config.max_new_tokens,
+            do_sample=config.do_sample,
+            temperature=config.temperature,
+            repetition_penalty=config.repetition_penalty,
+            top_k=config.top_k,
+            top_p=config.top_p,
+        ),
     )
 
 def get_global_controller() -> Controller:
