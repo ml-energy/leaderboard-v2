@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from spitfight.log import get_logger
 from spitfight.utils import BoundedExpiringDict
 from spitfight.colosseum.controller.worker import WorkerService
-from spitfight.prompt import get_system_prompt, add_system_prompt
+from spitfight.prompt import get_system_prompt, apply_model_characteristics
 
 if TYPE_CHECKING:
     from spitfight.colosseum.controller.router import ControllerConfig
@@ -115,11 +115,18 @@ class Controller:
         self.background_task_handle.cancel()
 
     async def _background_task(self, heartbeat_interval: int) -> None:
-        """Periodically check if dead workers are alive again and do GC."""
+        """Periodically check if dead workers are alive again and do request state GC."""
         while True:
             await asyncio.sleep(heartbeat_interval)
+
             await self.worker_service.check_workers()
+
+            prev_num_req_states = len(self.request_states)
             self.request_states.cleanup()
+            controller_logger.info(
+                "Request state garbage collection done: Removed %d reqeusts",
+                prev_num_req_states - len(self.request_states),
+            )
 
     def response_vote(self, request_id: str, victory_index: Literal[0, 1]) -> RequestState | None:
         """Record the user's response vote and return the new state."""
@@ -164,7 +171,7 @@ class Controller:
         except RuntimeError:
             controller_logger.error("Worker %s is dead.", model_name)
             raise
-        prompt = add_system_prompt(
+        prompt, stop_str, stop_token_ids = apply_model_characteristics(
             system_prompt=get_system_prompt("chat"),
             prompt=prompt,
             model_name=worker.model_id,
@@ -174,12 +181,51 @@ class Controller:
         response = ""
         energy = 0.0
         client = worker.get_client()
-        async for resp in client.generate_stream(prompt=prompt, max_new_tokens=self.max_new_tokens):
+        buffer = ""
+        async for resp in client.generate_stream(
+            prompt=prompt,
+            max_new_tokens=self.max_new_tokens,
+            stop_sequences=[stop_str] if stop_str is not None else None,
+        ):
             # Even special tokens consume energy when they're generated.
             energy += resp.token.energy
-            if not resp.token.special:
-                response += resp.token.text
-                yield json.dumps(resp.token.text).encode() + b"\0"
+
+            # Stop tokens usually don't overlap with (human-readable) stop sequences.
+            if resp.token.special or resp.token.id in stop_token_ids:
+                break
+
+            # Giving TGI `stop_sequences` will still generate the entire `stop_str`.
+            # Therefore, we still need to keep track of the possibility of stopping.
+            # If we see generated tokens matching the prefix of `stop_str`, we do not
+            # yield them to the user but keep it in `buffer`. Later, if `stop_str`
+            # ends up fully matching, we break the loop and discard the `buffer`, which
+            # would be identical to `stop_str`. Otherwise, which means that `buffer` is
+            # no longer a prefix of `stop_str`, we yield the `buffer` to the user.
+            if stop_str is not None:
+                # Avoid string concatenation if the buffer is empty.
+                if not buffer:
+                    buffer = resp.token.text
+                else:
+                    buffer += resp.token.text
+
+                # Full match. Finish generation.
+                if buffer == stop_str:
+                    break
+
+                # Partial match. Keep buffering.
+                if stop_str.startswith(buffer):
+                    continue
+
+                # No match. Yield and empty the buffer.
+                response += buffer
+                yield json.dumps(buffer).encode() + b"\0"
+                buffer = ""
+
+            # No stop sequence. Just yield the token.
+            else:
+                curr_text = resp.token.text
+                response += curr_text
+                yield json.dumps(curr_text).encode() + b"\0"
 
         request_state.set_response_and_energy(model_index, response, energy)
         request_logger.info(request_state.json())

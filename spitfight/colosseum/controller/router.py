@@ -1,5 +1,5 @@
 import uvicorn
-from pydantic import BaseConfig
+from pydantic import BaseSettings
 from fastapi import FastAPI, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
@@ -25,7 +25,8 @@ from spitfight.colosseum.controller.controller import (
 from spitfight.utils import prepend_generator
 
 
-class ControllerConfig(BaseConfig):
+class ControllerConfig(BaseSettings):
+    """Controller settings automatically loaded from environment variables."""
     max_new_tokens: int = 512
     background_task_interval: int = 300
     max_num_req_states: int = 10000
