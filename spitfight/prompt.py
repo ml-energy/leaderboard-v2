@@ -44,8 +44,12 @@ def get_system_prompt(task: Task | str) -> str:
     return SYSTEM_PROMPTS[task]
 
 
-def add_system_prompt(system_prompt: str, prompt: str, model_name: str) -> str:
-    """Wrap the prompt in the system prompt in the style understood by the model."""
+def apply_model_characteristics(
+    system_prompt: str,
+    prompt: str,
+    model_name: str,
+) -> tuple[str, str | None, list[int]]:
+    """Apply and return model-specific differences."""
     conv = get_conversation_template(model_name)
 
     if "llama-2" in model_name.lower():
@@ -60,4 +64,6 @@ def add_system_prompt(system_prompt: str, prompt: str, model_name: str) -> str:
     conv.append_message(conv.roles[0], prompt)
     conv.append_message(conv.roles[1], "")
 
-    return conv.get_prompt()
+    stop_str = None if conv.stop_str is None or not conv.stop_str else conv.stop_str
+
+    return conv.get_prompt(), stop_str, (conv.stop_token_ids or [])
