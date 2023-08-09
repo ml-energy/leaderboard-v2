@@ -5,9 +5,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ='America/Detroit'
 RUN apt-get update -qq \
     && apt-get -y --no-install-recommends install \
-       software-properties-common wget git \
+       tzdata software-properties-common wget git \
     && apt-get clean all \
-    && rm -r /var/lib/apt/lists/*
+    && rm -r /var/lib/apt/lists/* \
+    && ln -fs /usr/share/zoneinfo/America/Detroit /etc/localtime \
+    && dpkg-reconfigure -f noninteractive tzdata
 
 # Install Miniconda3 23.3.1
 ENV PATH="/root/.local/miniconda3/bin:$PATH"
@@ -25,4 +27,4 @@ RUN cd /workspace/leaderboard \
 
 WORKDIR /workspace/leaderboard
 
-CMD ["uvicorn", "spitfight.colosseum.controller.router:app", "--host", "0.0.0.0"]
+CMD ["python", "spitfight/colosseum/controller/router.py"]

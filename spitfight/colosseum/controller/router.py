@@ -1,3 +1,4 @@
+import uvicorn
 from pydantic import BaseConfig
 from fastapi import FastAPI, Depends
 from fastapi.responses import StreamingResponse
@@ -91,3 +92,7 @@ async def energy_vote(
 @app.get(COLOSSEUM_HEALTH_ROUTE)
 async def health():
     return "OK\n"
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", log_config=None)
