@@ -71,6 +71,7 @@ class Worker(BaseModel):
                     self.model_id,
                 )
                 return
+        logger.info("Worker %s is up.", repr(self))
         self.status = "up"
 
 

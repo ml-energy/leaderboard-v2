@@ -30,6 +30,7 @@ class ControllerConfig(BaseConfig):
     deployment_yaml: str = "deployment.yaml"
     controller_log_file: str = "controller.log"
     request_log_file: str = "requests.log"
+    uvicorn_log_file: str = "uvicorn.log"
 
 
 app = FastAPI()
@@ -37,6 +38,7 @@ settings = ControllerConfig()
 
 @app.on_event("startup")
 async def startup_event():
+    init_queued_root_logger("uvicorn", settings.uvicorn_log_file)
     init_queued_root_logger("spitfight.colosseum.controller", settings.controller_log_file)
     init_queued_root_logger("colosseum_requests", settings.request_log_file)
     init_global_controller(settings)

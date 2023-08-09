@@ -185,6 +185,11 @@ class Controller:
                     yield json.dumps(resp.token.text).encode() + b"\0"
         except OverloadedError:
             # TODO: Define controller errors in spitfight.colosseum.controller.errors.
+            # XXX: This is not well-handled by FastAPI, because it already started the
+            #      streaming response. One workaround would be to try to get just the
+            #      first token separately, and if that fails, return a 429. Or, we just
+            #      roughly check input length (without being precise) before even going
+            #      to TGI.
             raise HTTPException(status_code=429, detail="Model overloaded. Pleaes try again later.")
         except ValidationError as e:
             raise HTTPException(status_code=422, detail=str(e))

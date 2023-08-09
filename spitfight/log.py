@@ -4,12 +4,12 @@ import queue
 import logging
 from logging.handlers import QueueHandler, QueueListener
 
-ROOT_LOGGER_NAMES: list[str] = []
+ROOT_LOGGER_NAMES: list[str | None] = []
 ROOT_LOGGER_QUEUE_LISTENERS: list[QueueListener] = []
 
 
 def init_queued_root_logger(
-    name: str,
+    name: str | None,
     filepath: str,
     level: int = logging.INFO,
 ) -> None:
