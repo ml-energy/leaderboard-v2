@@ -371,9 +371,9 @@ def consumed_more_energy_message(energy_a, energy_b):
     more_energy = max(energy_a, energy_b)
     factor = more_energy / less_energy
     if factor >= 2.0:
-        message = f"<h2>That response <span class='red-text'>consumed {factor:.1f}x more energy.</span></h2>"
+        message = f"<h2>That response <span class='red-text'>consumed {factor:.1f}x more energy</span>.</h2>"
     else:
-        message = f"<h2>That response <span class='red-text'>consumed {factor * 100 - 100:.1f}% more energy.</span></h2>"
+        message = f"<h2>That response <span class='red-text'>consumed {factor * 100 - 100:.1f}% more energy</span>.</h2>"
     return message
 
 # Colosseum event handlers
@@ -532,7 +532,7 @@ with gr.Blocks(css=custom_css) as block:
 
             with gr.Row():
                 worth_energy_vote_btn = gr.Button(value="The better response was worth the extra energy.", visible=False)
-                notworth_energy_vote_btn = gr.Button(value="Not really.", visible=False)
+                notworth_energy_vote_btn = gr.Button(value="Not really worth it.", visible=False)
                 energy_vote_btn_list: list[gr.component.Component] = [worth_energy_vote_btn, notworth_energy_vote_btn]
 
             with gr.Row():
