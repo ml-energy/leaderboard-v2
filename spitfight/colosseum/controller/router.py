@@ -26,7 +26,7 @@ from spitfight.utils import prepend_generator
 
 
 class ControllerConfig(BaseConfig):
-    max_new_tokens: int = 256
+    max_new_tokens: int = 512
     background_task_interval: int = 300
     max_num_req_states: int = 10000
     req_state_expiration_time: int = 600
