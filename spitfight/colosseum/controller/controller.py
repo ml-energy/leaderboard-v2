@@ -132,13 +132,16 @@ class Controller:
         """Record the user's response vote and return the new state."""
         if (state := self.request_states.get(request_id)) is not None:
             state.set_response_vote(victory_index)
+            # Pop the state from the dict if the user has voted on energy.
+            if state.user_stage == "chose_less_energy_response":
+                self.request_states.pop(request_id)
             request_logger.info(state.json())
             return state
         return None
 
     def energy_vote(self, request_id: str, is_worth: bool) -> RequestState | None:
         """Record the user's energy vote and return the new state."""
-        # Pop the state from the dict, since this is the last step.
+        # Pop the state from the dict, since this is the last step in any case.
         if (state := self.request_states.pop(request_id)) is not None:
             state.set_energy_vote(is_worth)
             request_logger.info(state.json())

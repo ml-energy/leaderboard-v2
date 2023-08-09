@@ -1,3 +1,5 @@
+import json
+
 import uvicorn
 from pydantic import BaseSettings
 from fastapi import FastAPI, Depends
@@ -70,6 +72,11 @@ async def prompt(
     except ValidationError as e:
         logger.info("TGI returned validation error: %s. Failed request: %s", str(e), repr(request))
         raise HTTPException(status_code=422, detail=str(e))
+    except StopAsyncIteration:
+        logger.info("TGI returned empty response. Failed request: %s", repr(request))
+        return StreamingResponse(
+            iter([json.dumps("*The model generated an empty response.*").encode() + b"\0"]),
+        )
 
     return StreamingResponse(prepend_generator(first_token, generator))
 
