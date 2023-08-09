@@ -103,7 +103,7 @@ async def energy_vote(
 
 @app.get(COLOSSEUM_HEALTH_ROUTE)
 async def health():
-    return "OK\n"
+    return "OK"
 
 
 if __name__ == "__main__":
