@@ -34,8 +34,8 @@ class ControllerConfig(BaseSettings):
     max_num_req_states: int = 10000
     req_state_expiration_time: int = 600
     compose_files: list[str] = [
-        "../text-generation-inference/deployment/docker-compose-0.yml",
-        "../text-generation-inference/deployment/docker-compose-1.yml",
+        "../text-generation-inference/deployment/docker-compose-0.yaml",
+        "../text-generation-inference/deployment/docker-compose-1.yaml",
     ]
 
     # Logging
