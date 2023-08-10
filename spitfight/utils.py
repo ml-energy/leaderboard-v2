@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import time
 import heapq
-from typing import TypeVar, Generic, AsyncGenerator
+import asyncio
+from typing import TypeVar, Generic, AsyncGenerator, Any, Coroutine
+
+from fastapi.logger import logger
 
 K = TypeVar('K')
 V = TypeVar('V')
@@ -49,15 +52,24 @@ class BoundedExpiringDict(Generic[K, V]):
         return self.data_dict.get(key, default)
 
     def pop(self, key: K, default: V | None = None) -> V | None:
-        return self.data_dict.pop(key, default)
+        item = self.data_dict.pop(key, default)
+        if item is not None:
+            for i, (_, existing_key) in enumerate(self.timestamp_heap):
+                if existing_key == key:
+                    del self.timestamp_heap[i]
+                    break
+            heapq.heapify(self.timestamp_heap)
+        return item
 
     def cleanup(self) -> None:
-        threshold = time.monotonic() - self.timeout
+        now = time.monotonic()
         # After the while loop, the dictionary will be smaller than max_size
         # and all keys will have been accessed within the timeout.
-        while (self.timestamp_heap and self.timestamp_heap[0][0] < threshold) or len(self.data_dict) > self.max_size:
+        while (self.timestamp_heap and now - self.timestamp_heap[0][0] > self.timeout) or len(self.data_dict) > self.max_size:
             _, key = heapq.heappop(self.timestamp_heap)
             del self.data_dict[key]
+
+        assert len(self.data_dict) == len(self.timestamp_heap)
 
 
 T = TypeVar("T")
@@ -71,3 +83,26 @@ async def prepend_generator(
     yield first_item
     async for item in generator:
         yield item
+
+
+def create_task(coroutine: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
+    """Create an `asyncio.Task` but ensure that exceptions are logged.
+
+    Reference: https://quantlane.com/blog/ensure-asyncio-task-exceptions-get-logged/
+    """
+    loop = asyncio.get_running_loop()
+    task = loop.create_task(coroutine)
+    task.add_done_callback(_handle_task_exception)
+    return task
+
+
+def _handle_task_exception(task: asyncio.Task) -> None:
+    """Print out exception and tracebook when a task dies with an exception."""
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        # Cancellation should not be logged as an error.
+        pass
+    except Exception:  # pylint: disable=broad-except
+        # `logger.exception` automatically handles exception and traceback info.
+        logger.exception("Job task died with an exception!")

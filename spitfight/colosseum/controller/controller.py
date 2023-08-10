@@ -9,7 +9,7 @@ from pytz import timezone
 from pydantic import BaseModel, Field
 
 from spitfight.log import get_logger
-from spitfight.utils import BoundedExpiringDict
+from spitfight.utils import BoundedExpiringDict, create_task
 from spitfight.colosseum.controller.worker import WorkerService
 from spitfight.prompt import get_system_prompt, apply_model_characteristics
 
@@ -117,7 +117,7 @@ class Controller:
 
         self.generation_config = generation_config
 
-        self.background_task_handle = asyncio.create_task(
+        self.background_task_handle = create_task(
             self._background_task(background_task_interval),
         )
 
