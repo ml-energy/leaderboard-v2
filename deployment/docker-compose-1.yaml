@@ -1,9 +1,11 @@
 services:
-  MPT-30B:
+  Llama2-70B-INT8:
     container_name: worker4
     image: mlenergy/tgi:latest
-    command: ["--model-id", "mosaicml/mpt-30b-chat", "--num-shard", "2", "--otlp-endpoint", "http://jaeger:4317"]
+    command: ["--model-id", "meta-llama/Llama-2-70b-chat-hf", "--num-shard", "2", "--otlp-endpoint", "http://jaeger:4317", "--quantize", "bitsandbytes"]
     shm_size: 1g
+    environment:
+      HUGGING_FACE_HUB_TOKEN: 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
     networks:
       - leaderboard
     volumes:
