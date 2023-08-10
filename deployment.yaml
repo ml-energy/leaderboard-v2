@@ -1,14 +1,4 @@
 workers:
-  # - name: bigscience/bloom-560m
-  #   docker_params:
-  #     name: worker0
-  #     gpus: '"device=0"'
-  #   tgi_params:
-  #     port: 80
-  #     model_id: bigscience/bloom-560m
-  #     num_shard: 1
-  #   deployment_params:
-  #     nodename: ampere01
   - name: tiiuae/falcon-7b-instruct
     docker_params:
       name: worker0
@@ -29,3 +19,13 @@ workers:
       num_shard: 1
     deployment_params:
       nodename: ampere02
+  - name: mosaicml/mpt-30b-chat
+    docker_params:
+      name: worker4
+      gpus: '"device=0,1"'
+    tgi_params:
+      port: 80
+      model_id: mosaicml/mpt-30b-chat
+      num_shard: 2
+    deployment_params:
+      nodename: ampere01
