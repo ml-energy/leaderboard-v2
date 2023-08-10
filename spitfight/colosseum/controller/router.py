@@ -6,7 +6,7 @@ from pydantic import BaseSettings
 from fastapi import FastAPI, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.exceptions import HTTPException
-from text_generation.errors import OverloadedError, ValidationError
+from text_generation.errors import OverloadedError, UnknownError, ValidationError
 
 from spitfight.log import get_logger, init_queued_root_logger, shutdown_queued_root_loggers
 from spitfight.colosseum.common import (
@@ -89,6 +89,9 @@ async def prompt(
         return StreamingResponse(
             iter([json.dumps("*The model generated an empty response.*").encode() + b"\0"]),
         )
+    except UnknownError as e:
+        logger.error("TGI returned unknown error: %s. Failed request: %s", str(e), repr(request))
+        raise HTTPException(status_code=500, detail=str(e))
 
     return StreamingResponse(prepend_generator(first_token, generator))
 

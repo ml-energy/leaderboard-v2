@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
-import httpx
+import aiohttp
 from pytz import timezone
 from pydantic import BaseModel, Field
 
@@ -47,7 +47,7 @@ class RequestState(BaseModel):
     prompt: str
     model_names: list[str]
     responses: list[str] = ["EMPTY", "EMPTY"]
-    energy_consumptions: list[float] = [-1.0, -1.0]
+    energy_consumptions: list[float] = [0.0, 0.0]
     response_victory_index: Optional[Literal[0, 1]] = None
     extra_energy_was_worth: Optional[bool] = None
 
@@ -207,7 +207,8 @@ class Controller:
                 energy += resp.token.energy
 
                 # Stop tokens usually don't overlap with (human-readable) stop sequences.
-                if resp.token.special or resp.token.id in stop_token_ids:
+                # if resp.token.special or resp.token.id in stop_token_ids:
+                if resp.token.id in stop_token_ids:
                     # If the buffer is not empty (i.e., we had partial stop_str matches),
                     # just yield it to the user.
                     if (chunk := buffer.token_buffer):
@@ -215,22 +216,28 @@ class Controller:
                         yield json.dumps(chunk).encode() + b"\0"
                     break
 
+                if resp.token.special:
+                    continue
+
                 buffer.append(resp.token.text)
                 if (chunk := buffer.pop()) is not None:
                     response += chunk
                     yield json.dumps(chunk).encode() + b"\0"
                 elif buffer.matched_stop_str:
                     break
-        except (httpx.ConnectError, httpx.TimeoutException):
+        except aiohttp.ClientConnectorError:
             worker.status = "down"
             controller_logger.error(
                 "Problem talking to %s. Aborting and setting worker status to down",
                 repr(worker),
             )
             raise
-
-        request_state.set_response_and_energy(model_index, response, energy)
-        request_logger.info(request_state.json())
+        except Exception:
+            yield json.dumps(buffer.token_buffer).encode() + b"\0"
+            raise
+        finally:
+            request_state.set_response_and_energy(model_index, response, energy)
+            request_logger.info(request_state.json())
 
 
 CONTROLLER: Controller | None = None
