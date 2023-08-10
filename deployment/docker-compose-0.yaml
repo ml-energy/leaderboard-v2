@@ -1,0 +1,74 @@
+services:
+  Falcon-7B:
+    container_name: worker0
+    image: mlenergy/tgi:latest
+    command: ["--model-id", "tiiuae/falcon-7b-instruct", "--num-shard", "1", "--otlp-endpoint", "http://jaeger:4317"]
+    shm_size: 1g
+    networks:
+      - leaderboard
+    volumes:
+      - /data/leaderboard/tgi-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+  Llama2-7B:
+    container_name: worker1
+    image: mlenergy/tgi:latest
+    command: ["--model-id", "/weights/metaai/Llama-2-7b-chat-hf", "--num-shard", "1", "--otlp-endpoint", "http://jaeger:4317"]
+    shm_size: 1g
+    networks:
+      - leaderboard
+    volumes:
+      - /data/leaderboard/tgi-data:/data
+      - /data/leaderboard/weights:/weights
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+  FastChat-T5-3B:
+    container_name: worker2
+    image: mlenergy/tgi:latest
+    command: ["--model-id", "lmsys/fastchat-t5-3b-v1.0", "--num-shard", "1", "--otlp-endpoint", "http://jaeger:4317"]
+    environment:
+      PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: python
+    shm_size: 1g
+    networks:
+      - leaderboard
+    volumes:
+      - /data/leaderboard/tgi-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2"]
+              capabilities: [gpu]
+  Llama2-13B:
+    container_name: worker3
+    image: mlenergy/tgi:latest
+    command: ["--model-id", "/weights/metaai/Llama-2-13b-chat-hf", "--num-shard", "1", "--otlp-endpoint", "http://jaeger:4317"]
+    shm_size: 1g
+    networks:
+      - leaderboard
+    volumes:
+      - /data/leaderboard/tgi-data:/data
+      - /data/leaderboard/weights:/weights
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["3"]
+              capabilities: [gpu]
+
+networks:
+  leaderboard:
+    name: leaderboard
+    external: true

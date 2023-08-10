@@ -1,0 +1,38 @@
+services:
+  MPT-30B:
+    container_name: worker4
+    image: mlenergy/tgi:latest
+    command: ["--model-id", "mosaicml/mpt-30b-chat", "--num-shard", "2", "--otlp-endpoint", "http://jaeger:4317"]
+    shm_size: 1g
+    networks:
+      - leaderboard
+    volumes:
+      - /data/leaderboard/tgi-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1"]
+              capabilities: [gpu]
+  Falcon-40B:
+    container_name: worker5
+    image: mlenergy/tgi:latest
+    command: ["--model-id", "tiiuae/falcon-40b-instruct", "--num-shard", "2", "--otlp-endpoint", "http://jaeger:4317"]
+    shm_size: 1g
+    networks:
+      - leaderboard
+    volumes:
+      - /data/leaderboard/tgi-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["2", "3"]
+              capabilities: [gpu]
+
+networks:
+  leaderboard:
+    name: leaderboard
+    external: true
