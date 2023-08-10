@@ -13,7 +13,7 @@ V = TypeVar('V')
 
 
 class BoundedExpiringDict(Generic[K, V]):
-    def __init__(self, expiration_time: int) -> None:
+    def __init__(self, max_size: int, expiration_time: int) -> None:
         self.data_dict: dict[K, V] = {}
         self.timestamp_heap: list[tuple[float, K]] = []
         self.timeout = expiration_time
@@ -21,7 +21,7 @@ class BoundedExpiringDict(Generic[K, V]):
         # Without this, the controller is vulnerable to "user flood attacks,"
         # where someone can create a bunch of users by polling /request before
         # self.timeout expires and blow up memory.
-        self.max_size = 10000
+        self.max_size = max_size
 
     def __getitem__(self, key: K) -> V:
         return self.data_dict[key]

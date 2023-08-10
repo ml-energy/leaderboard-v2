@@ -111,9 +111,8 @@ class Controller:
         worker_service: WorkerService,
         generation_config: GenerationConfig,
     ):
-        self.max_num_req_states = max_num_req_states
         self.request_states: BoundedExpiringDict[str, RequestState] = \
-            BoundedExpiringDict(req_state_expiration_time)
+            BoundedExpiringDict(max_num_req_states, req_state_expiration_time)
         self.worker_service = worker_service
 
         self.generation_config = generation_config

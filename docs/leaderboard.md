@@ -3,7 +3,7 @@ The goal of the ML.ENERGY Leaderboard is to give people a sense of how much **en
 The code for the leaderboard, backing data, and scripts for benchmarking are all open-source in our [repository](https://github.com/ml-energy/leaderboard).
 We'll see you at the [Discussion board](https://github.com/ml-energy/leaderboard/discussions), where you can ask questions, suggest improvement ideas, or just discuss leaderboard results!
 
-## Columns
+## Leaderboard Columns
 
 - `gpu`: NVIDIA GPU model name.
 - `task`: Name of the task. See *Tasks* below for details.
