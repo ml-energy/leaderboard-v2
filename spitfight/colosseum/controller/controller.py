@@ -210,16 +210,15 @@ class Controller:
                 if resp.token.special or resp.token.id in stop_token_ids:
                     # If the buffer is not empty (i.e., we had partial stop_str matches),
                     # just yield it to the user.
-                    if buffer:
-                        response += buffer.token_buffer
-                        yield json.dumps(buffer).encode() + b"\0"
+                    if (chunk := buffer.token_buffer):
+                        response += chunk
+                        yield json.dumps(chunk).encode() + b"\0"
                     break
 
                 buffer.append(resp.token.text)
-
                 if (chunk := buffer.pop()) is not None:
                     response += chunk
-                    yield json.dumps(buffer).encode() + b"\0"
+                    yield json.dumps(chunk).encode() + b"\0"
                 elif buffer.matched_stop_str:
                     break
         except (httpx.ConnectError, httpx.TimeoutException):
