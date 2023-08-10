@@ -510,22 +510,25 @@ with gr.Blocks(css=custom_css) as block:
 
             with gr.Row():
                 masked_model_names = []
-                with gr.Column():
-                    masked_model_names.append(gr.Markdown(ANONYMOUS_MODEL_TEXT))
-                with gr.Column():
-                    masked_model_names.append(gr.Markdown(ANONYMOUS_MODEL_TEXT))
-
-            with gr.Row():
                 chatbots = []
+                resp_vote_btn_list: list[gr.component.Component] = []
                 with gr.Column():
-                    chatbots.append(gr.Chatbot(label="Model A", elem_id="chatbot", height=600))
-                with gr.Column():
-                    chatbots.append(gr.Chatbot(label="Model B", elem_id="chatbot", height=600))
+                    with gr.Row():
+                        masked_model_names.append(gr.Markdown(ANONYMOUS_MODEL_TEXT))
+                    with gr.Row():
+                        chatbots.append(gr.Chatbot(label="Model A", elem_id="chatbot", height=600))
+                    with gr.Row():
+                        left_resp_vote_btn = gr.Button(value="👈 Model A is better", interactive=False)
+                        resp_vote_btn_list.append(left_resp_vote_btn)
 
-            with gr.Row():
-                left_resp_vote_btn = gr.Button(value="👈 Model A is better", interactive=False)
-                right_resp_vote_btn = gr.Button(value="👉 Model B is better", interactive=False)
-                resp_vote_btn_list: list[gr.component.Component] = [left_resp_vote_btn, right_resp_vote_btn]
+                with gr.Column():
+                    with gr.Row():
+                        masked_model_names.append(gr.Markdown(ANONYMOUS_MODEL_TEXT))
+                    with gr.Row():
+                        chatbots.append(gr.Chatbot(label="Model B", elem_id="chatbot", height=600))
+                    with gr.Row():
+                        right_resp_vote_btn = gr.Button(value="👉 Model B is better", interactive=False)
+                        resp_vote_btn_list.append(right_resp_vote_btn)
 
             with gr.Row():
                 energy_comparison_message = gr.HTML(visible=False)
