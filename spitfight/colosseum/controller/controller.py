@@ -258,7 +258,7 @@ def init_global_controller(config: ControllerConfig) -> None:
         background_task_interval=config.background_task_interval,
         max_num_req_states=config.max_num_req_states,
         req_state_expiration_time=config.req_state_expiration_time,
-        worker_service=WorkerService(config.deployment_yaml),
+        worker_service=WorkerService(config.compose_files),
         generation_config=GenerationConfig(
             max_new_tokens=config.max_new_tokens,
             do_sample=config.do_sample,

@@ -33,7 +33,10 @@ class ControllerConfig(BaseSettings):
     background_task_interval: int = 300
     max_num_req_states: int = 10000
     req_state_expiration_time: int = 600
-    deployment_yaml: str = "deployment.yaml"
+    compose_files: list[str] = [
+        "../text-generation-inference/deployment/docker-compose-0.yml",
+        "../text-generation-inference/deployment/docker-compose-1.yml",
+    ]
 
     # Logging
     controller_log_file: str = "controller.log"
