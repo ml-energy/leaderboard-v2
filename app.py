@@ -349,7 +349,7 @@ def disable_interact():
     return [gr.update(interactive=False)] * 2
 
 def consumed_less_energy_message(energy_a, energy_b):
-    """Retuen a message that indicates that the user chose the model that consumed less energy.
+    """Return a message that indicates that the user chose the model that consumed less energy.
 
     By default report in "%f %" but if the difference is larger than 2 times, report in "%f X".
     """
@@ -363,7 +363,7 @@ def consumed_less_energy_message(energy_a, energy_b):
     return message
 
 def consumed_more_energy_message(energy_a, energy_b):
-    """Retuen a message that indicates that the user chose the model that consumed more energy.
+    """Return a message that indicates that the user chose the model that consumed more energy.
 
     By default report in "%f %" but if the difference is larger than 2 times, report in "%f X".
     """
