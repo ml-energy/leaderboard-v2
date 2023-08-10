@@ -97,7 +97,7 @@ def _check_response(response: requests.Response) -> None:
 class TestControllerClient(unittest.TestCase):
     def test_new_uuid_on_deepcopy(self):
         client = ControllerClient("http://localhost:8000")
-        clients = [deepcopy(client) for _ in range(50)]
+        clients = [client.fork() for _ in range(50)]
         request_ids = [client.request_id for client in clients]
         assert len(set(request_ids)) == len(request_ids)
 

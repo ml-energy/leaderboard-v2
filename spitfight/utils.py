@@ -183,7 +183,7 @@ class TokenGenerationBuffer:
 
 class TestTokenGenerationBuffer(unittest.TestCase):
     def test_basic1(self):
-        buffer = TokenGenerationBuffer("stop")
+        buffer = TokenGenerationBuffer(stop_str="stop")
 
         buffer.append("hello")
         self.assertEqual(buffer.pop(), "hello")
@@ -205,7 +205,7 @@ class TestTokenGenerationBuffer(unittest.TestCase):
         self.assertTrue(buffer.matched_stop_str)
 
     def test_basic2(self):
-        buffer = TokenGenerationBuffer("stop")
+        buffer = TokenGenerationBuffer(stop_str="stop")
 
         buffer.append("hi")
         self.assertEqual(buffer.pop(), "hi")
@@ -240,7 +240,7 @@ class TestTokenGenerationBuffer(unittest.TestCase):
         self.assertTrue(buffer.matched_stop_str)
 
     def test_falcon1(self):
-        buffer = TokenGenerationBuffer("\nUser")
+        buffer = TokenGenerationBuffer(stop_str="\nUser")
 
         buffer.append("Hi")
         self.assertEqual(buffer.pop(), "Hi")
@@ -259,7 +259,7 @@ class TestTokenGenerationBuffer(unittest.TestCase):
         self.assertTrue(buffer.matched_stop_str)
 
     def test_falcon2(self):
-        buffer = TokenGenerationBuffer("\nUser")
+        buffer = TokenGenerationBuffer(stop_str="\nUser")
 
         buffer.append("\n")
         self.assertEqual(buffer.pop(), None)
@@ -283,21 +283,22 @@ class TestTokenGenerationBuffer(unittest.TestCase):
         self.assertTrue(buffer.matched_stop_str)
 
     def test_no_stop_str(self):
-        buffer = TokenGenerationBuffer()
+        buffer = TokenGenerationBuffer(stop_str=None)
 
         buffer.append("hello")
         self.assertEqual(buffer.pop(), "hello")
+        self.assertEqual(buffer.pop(), None)
         self.assertFalse(buffer.matched_stop_str)
 
         buffer.append("world")
         self.assertEqual(buffer.pop(), "world")
+        self.assertEqual(buffer.pop(), None)
         self.assertFalse(buffer.matched_stop_str)
 
         buffer.append("\n")
         self.assertEqual(buffer.pop(), "\n")
+        self.assertEqual(buffer.pop(), None)
         self.assertFalse(buffer.matched_stop_str)
-
-
 
 
 if __name__ == "__main__":
