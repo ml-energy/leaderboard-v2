@@ -216,9 +216,11 @@ class Controller:
                         yield json.dumps(chunk).encode() + b"\0"
                     break
 
+                # Skip special tokens.
                 if resp.token.special:
                     continue
 
+                # The buffer automatically handles `stop_str` partial and full matches.
                 buffer.append(resp.token.text)
                 if (chunk := buffer.pop()) is not None:
                     response += chunk
