@@ -45,7 +45,7 @@ class ControllerConfig(BaseSettings):
     # Generation
     max_new_tokens: int = 512
     do_sample: bool = True
-    temperature: float = 0.7
+    temperature: float = 1.0
     repetition_penalty: float = 1.0
     top_k: int = 50
     top_p: float = 0.95

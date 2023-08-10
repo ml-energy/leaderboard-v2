@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime
 from typing import AsyncGenerator, Literal, Optional, TYPE_CHECKING
 
+import httpx
 from pytz import timezone
 from pydantic import BaseModel, Field
 
@@ -196,55 +197,63 @@ class Controller:
         energy = 0.0
         client = worker.get_client()
         buffer = ""
-        async for resp in client.generate_stream(
-            prompt=prompt,
-            stop_sequences=[stop_str] if stop_str is not None else None,
-            **self.generation_config.dict(),
-        ):
-            # Even special tokens consume energy when they're generated.
-            energy += resp.token.energy
+        try:
+            async for resp in client.generate_stream(
+                prompt=prompt,
+                stop_sequences=[stop_str] if stop_str is not None else None,
+                **self.generation_config.dict(),
+            ):
+                # Even special tokens consume energy when they're generated.
+                energy += resp.token.energy
 
-            # Stop tokens usually don't overlap with (human-readable) stop sequences.
-            if resp.token.special or resp.token.id in stop_token_ids:
-                # If the buffer is not empty (i.e., we had partial stop_str matches),
-                # yield it to the user.
-                if buffer:
-                    response += buffer
-                    yield json.dumps(buffer).encode() + b"\0"
-                break
-
-            # Giving TGI `stop_sequences` will still generate the entire `stop_str`.
-            # Therefore, we still need to keep track of the possibility of stopping.
-            # If we see generated tokens matching the prefix of `stop_str`, we do not
-            # yield them to the user but keep it in `buffer`. Later, if `stop_str`
-            # ends up fully matching, we break the loop and discard the `buffer`, which
-            # would be identical to `stop_str`. Otherwise, which means that `buffer` is
-            # no longer a prefix of `stop_str`, we yield the `buffer` to the user.
-            if stop_str is not None:
-                # Avoid string concatenation if the buffer is empty.
-                if not buffer:
-                    buffer = resp.token.text
-                else:
-                    buffer += resp.token.text
-
-                # Full match. Finish generation.
-                if buffer == stop_str:
+                # Stop tokens usually don't overlap with (human-readable) stop sequences.
+                if resp.token.special or resp.token.id in stop_token_ids:
+                    # If the buffer is not empty (i.e., we had partial stop_str matches),
+                    # yield it to the user.
+                    if buffer:
+                        response += buffer
+                        yield json.dumps(buffer).encode() + b"\0"
                     break
 
-                # Partial match. Keep buffering.
-                if stop_str.startswith(buffer):
-                    continue
+                # Giving TGI `stop_sequences` will still generate the entire `stop_str`.
+                # Therefore, we still need to keep track of the possibility of stopping.
+                # If we see generated tokens matching the prefix of `stop_str`, we do not
+                # yield them to the user but keep it in `buffer`. Later, if `stop_str`
+                # ends up fully matching, we break the loop and discard the `buffer`, which
+                # would be identical to `stop_str`. Otherwise, which means that `buffer` is
+                # no longer a prefix of `stop_str`, we yield the `buffer` to the user.
+                if stop_str is not None:
+                    # Avoid string concatenation if the buffer is empty.
+                    if not buffer:
+                        buffer = resp.token.text
+                    else:
+                        buffer += resp.token.text
 
-                # No match. Yield and empty the buffer.
-                response += buffer
-                yield json.dumps(buffer).encode() + b"\0"
-                buffer = ""
+                    # Full match. Finish generation.
+                    if buffer == stop_str:
+                        break
 
-            # No stop sequence. Just yield the token.
-            else:
-                curr_text = resp.token.text
-                response += curr_text
-                yield json.dumps(curr_text).encode() + b"\0"
+                    # Partial match. Keep buffering.
+                    if stop_str.startswith(buffer):
+                        continue
+
+                    # No match. Yield and empty the buffer.
+                    response += buffer
+                    yield json.dumps(buffer).encode() + b"\0"
+                    buffer = ""
+
+                # No stop sequence. Just yield the token.
+                else:
+                    curr_text = resp.token.text
+                    response += curr_text
+                    yield json.dumps(curr_text).encode() + b"\0"
+        except (httpx.ConnectError, httpx.TimeoutException):
+            worker.status = "down"
+            controller_logger.error(
+                "Problem talking to %s. Aborting and setting worker status to down",
+                repr(worker),
+            )
+            raise
 
         request_state.set_response_and_energy(model_index, response, energy)
         request_logger.info(request_state.json())
