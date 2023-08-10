@@ -14,10 +14,16 @@ logger = get_logger(__name__)
 
 
 class Worker(BaseModel):
+    """A worker that serves a model."""
+    # Worker's container name, since we're using Overlay networks.
     hostname: str
+    # For TGI, this would always be 80.
     port: int
+    # User-friendly model name, e.g. "metaai/llama2-13b-chat".
     model_name: str
+    # Hugging Face model ID, e.g. "metaai/Llama-2-13b-chat-hf".
     model_id: str
+    # Whether the model worker container is good.
     status: Literal["up", "down"]
 
     class Config:
@@ -47,6 +53,7 @@ class Worker(BaseModel):
         if info["model_id"] != self.model_id:
             raise ValueError(f"Model name mismatch: {info['model_id']} != {self.model_id}")
         self.status = "up"
+        logger.info("%s is up.", repr(self))
 
     async def check_status(self) -> None:
         """Check worker status and update `self.status` accordingly."""
@@ -55,7 +62,7 @@ class Worker(BaseModel):
                 response = await client.get(self.url + "/info")
             except (httpx.ConnectError, httpx.TimeoutException) as e:
                 self.status = "down"
-                logger.warning("Worker %s is down: %s", repr(self), repr(e))
+                logger.warning("%s is down: %s", repr(self), repr(e))
                 return
             if response.status_code != 200:
                 self.status = "down"
@@ -65,13 +72,13 @@ class Worker(BaseModel):
             if info["model_id"] != self.model_id:
                 self.status = "down"
                 logger.warning(
-                    "Model name mismatch for worker %s: %s != %s",
+                    "Model name mismatch for %s: %s != %s",
                     repr(self),
                     info["model_id"],
                     self.model_id,
                 )
                 return
-        logger.info("Worker %s is up.", repr(self))
+        logger.info("%s is up.", repr(self))
         self.status = "up"
 
 
@@ -86,24 +93,30 @@ class WorkerService:
         workers (list[Worker]): The list of workers.
     """
 
-    def __init__(self, deployment_yaml: str) -> None:
+    def __init__(self, compose_files: list[str]) -> None:
         """Initialize the worker service."""
-        deployment = yaml.safe_load(open(deployment_yaml))
-
         self.workers: list[Worker] = []
         worker_model_names = set()
-        for model in deployment["workers"]:
-            model_name = model["name"]
-            worker_model_names.add(model_name)
-            worker = Worker(
-                hostname=model["docker_params"]["name"],
-                port=model["tgi_params"]["port"],
-                model_name=model_name,
-                model_id=model["tgi_params"]["model_id"],
-                status="up",
-            )
-            worker.audit()
-            self.workers.append(worker)
+        for compose_file in compose_files:
+            spec = yaml.safe_load(open(compose_file))
+            for model_name, service_spec in spec["services"].items():
+                command = service_spec["command"]
+                for i, cmd in enumerate(command):
+                    if cmd == "--model-id":
+                        model_id = command[i + 1]
+                        break
+                else:
+                    raise ValueError(f"Could not find model ID in {command!r}")
+                worker_model_names.add(model_name)
+                worker = Worker(
+                    hostname=service_spec["container_name"],
+                    port=80,
+                    model_name=model_name,
+                    model_id=model_id,
+                    status="down",
+                )
+                worker.audit()
+                self.workers.append(worker)
 
         if len(worker_model_names) != len(self.workers):
             raise ValueError("Model names must be unique.")
