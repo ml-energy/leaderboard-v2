@@ -1,3 +1,4 @@
+import os
 import json
 
 import uvicorn
@@ -33,12 +34,10 @@ class ControllerConfig(BaseSettings):
     background_task_interval: int = 300
     max_num_req_states: int = 10000
     req_state_expiration_time: int = 600
-    compose_files: list[str] = [
-        "../text-generation-inference/deployment/docker-compose-0.yaml",
-        "../text-generation-inference/deployment/docker-compose-1.yaml",
-    ]
+    compose_files: list[str] = ["deployment/docker-compose-0.yaml", "deployment/docker-compose-1.yaml"]
 
     # Logging
+    log_dir: str = "/logs"
     controller_log_file: str = "controller.log"
     request_log_file: str = "requests.log"
     uvicorn_log_file: str = "uvicorn.log"
@@ -58,9 +57,9 @@ logger = get_logger("spitfight.colosseum.controller.router")
 
 @app.on_event("startup")
 async def startup_event():
-    init_queued_root_logger("uvicorn", settings.uvicorn_log_file)
-    init_queued_root_logger("spitfight.colosseum.controller", settings.controller_log_file)
-    init_queued_root_logger("colosseum_requests", settings.request_log_file)
+    init_queued_root_logger("uvicorn", os.path.join(settings.log_dir, settings.uvicorn_log_file))
+    init_queued_root_logger("spitfight.colosseum.controller", os.path.join(settings.log_dir, settings.controller_log_file))
+    init_queued_root_logger("colosseum_requests", os.path.join(settings.log_dir, settings.request_log_file))
     init_global_controller(settings)
 
 @app.on_event("shutdown")
