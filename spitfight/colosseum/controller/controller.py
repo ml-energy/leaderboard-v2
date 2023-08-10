@@ -10,7 +10,7 @@ from pytz import timezone
 from pydantic import BaseModel, Field
 
 from spitfight.log import get_logger
-from spitfight.utils import BoundedExpiringDict, create_task
+from spitfight.utils import BoundedExpiringDict, TokenGenerationBuffer, create_task
 from spitfight.colosseum.controller.worker import WorkerService
 from spitfight.prompt import get_system_prompt, apply_model_characteristics
 
@@ -196,7 +196,7 @@ class Controller:
         response = ""
         energy = 0.0
         client = worker.get_client()
-        buffer = ""
+        buffer = TokenGenerationBuffer(stop_str=stop_str)
         try:
             async for resp in client.generate_stream(
                 prompt=prompt,
@@ -209,44 +209,19 @@ class Controller:
                 # Stop tokens usually don't overlap with (human-readable) stop sequences.
                 if resp.token.special or resp.token.id in stop_token_ids:
                     # If the buffer is not empty (i.e., we had partial stop_str matches),
-                    # yield it to the user.
+                    # just yield it to the user.
                     if buffer:
-                        response += buffer
+                        response += buffer.token_buffer
                         yield json.dumps(buffer).encode() + b"\0"
                     break
 
-                # Giving TGI `stop_sequences` will still generate the entire `stop_str`.
-                # Therefore, we still need to keep track of the possibility of stopping.
-                # If we see generated tokens matching the prefix of `stop_str`, we do not
-                # yield them to the user but keep it in `buffer`. Later, if `stop_str`
-                # ends up fully matching, we break the loop and discard the `buffer`, which
-                # would be identical to `stop_str`. Otherwise, which means that `buffer` is
-                # no longer a prefix of `stop_str`, we yield the `buffer` to the user.
-                if stop_str is not None:
-                    # Avoid string concatenation if the buffer is empty.
-                    if not buffer:
-                        buffer = resp.token.text
-                    else:
-                        buffer += resp.token.text
+                buffer.append(resp.token.text)
 
-                    # Full match. Finish generation.
-                    if buffer == stop_str:
-                        break
-
-                    # Partial match. Keep buffering.
-                    if stop_str.startswith(buffer):
-                        continue
-
-                    # No match. Yield and empty the buffer.
-                    response += buffer
+                if (chunk := buffer.pop()) is not None:
+                    response += chunk
                     yield json.dumps(buffer).encode() + b"\0"
-                    buffer = ""
-
-                # No stop sequence. Just yield the token.
-                else:
-                    curr_text = resp.token.text
-                    response += curr_text
-                    yield json.dumps(curr_text).encode() + b"\0"
+                elif buffer.matched_stop_str:
+                    break
         except (httpx.ConnectError, httpx.TimeoutException):
             worker.status = "down"
             controller_logger.error(

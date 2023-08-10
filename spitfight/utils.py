@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import heapq
 import asyncio
+import unittest
 from typing import TypeVar, Generic, AsyncGenerator, Any, Coroutine
 
 from fastapi.logger import logger
@@ -106,3 +107,198 @@ def _handle_task_exception(task: asyncio.Task) -> None:
     except Exception:  # pylint: disable=broad-except
         # `logger.exception` automatically handles exception and traceback info.
         logger.exception("Job task died with an exception!")
+
+
+class TokenGenerationBuffer:
+    """A constant sized buffer for tokens, used to handle stop sequences.
+
+    Attributes:
+        token_buffer (str): Internal buffer for tokens.
+        matched_stop_str (bool): Whether the stop string has been seen. When this
+            is True, generation should stop and `pop` will always return None.
+    """
+    def __init__(self, stop_str: str | None = None) -> None:
+        """Initialize the buffer.
+
+        If `stop_str` is None, the buffer will just return all tokens as they come.
+        """
+        self.stop_str = stop_str
+        self.token_len_list = []
+        self.token_buffer = ""
+        self.matched_stop_str = False
+
+    def append(self, text: str) -> None:
+        """Append a token to the buffer."""
+        if self.stop_str is not None:
+            self.token_len_list.append(len(text))
+        self.token_buffer += text
+
+    def _pop_one(self) -> str:
+        """Remove and return the first token in the buffer."""
+        token_len = self.token_len_list.pop(0)
+        token, self.token_buffer = self.token_buffer[:token_len], self.token_buffer[token_len:]
+        return token
+
+    def pop(self) -> str | None:
+        """Try to pop a token from the buffer.
+
+        Return value None means that there is nothing to yield for now.
+        Repeated calls to this method will always just return None before more
+        tokens are appended to the buffer.
+        """
+        # A short circuit for no stop string.
+        if self.stop_str is None:
+            return_buffer = self.token_buffer or None
+            self.token_buffer = ""
+            return return_buffer
+
+        if self.matched_stop_str:
+            return None
+
+        # The token buffer matched the stop string. We're done generating.
+        if self.stop_str == self.token_buffer:
+            self.matched_stop_str = True
+            return None
+
+        # The tokens in the buffer could potentially be part of the stop string.
+        # We'll stay put until we see more tokens. This also covers the case of
+        # empty token buffer.
+        if self.stop_str.startswith(self.token_buffer):
+            return None
+
+        # We can return tokens from the beginning of the buffer until the buffer
+        # is a prefix of the stop string.
+        return_buffer = ""
+        while self.token_buffer:
+            return_buffer += self._pop_one()
+            if self.stop_str == self.token_buffer:
+                self.matched_stop_str = True
+                break
+            if self.stop_str.startswith(self.token_buffer):
+                break
+
+        return return_buffer or None
+
+
+
+class TestTokenGenerationBuffer(unittest.TestCase):
+    def test_basic1(self):
+        buffer = TokenGenerationBuffer("stop")
+
+        buffer.append("hello")
+        self.assertEqual(buffer.pop(), "hello")
+        self.assertEqual(buffer.pop(), None)
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("world")
+        self.assertEqual(buffer.pop(), "world")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("stop")
+        self.assertEqual(buffer.pop(), None)
+        self.assertTrue(buffer.matched_stop_str)
+        self.assertEqual(buffer.pop(), None)
+        self.assertTrue(buffer.matched_stop_str)
+        self.assertEqual(buffer.pop(), None)
+        self.assertTrue(buffer.matched_stop_str)
+        self.assertEqual(buffer.pop(), None)
+        self.assertTrue(buffer.matched_stop_str)
+
+    def test_basic2(self):
+        buffer = TokenGenerationBuffer("stop")
+
+        buffer.append("hi")
+        self.assertEqual(buffer.pop(), "hi")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("stole")
+        self.assertEqual(buffer.pop(), "stole")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("sto")
+        self.assertEqual(buffer.pop(), None)
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("ic")
+        self.assertEqual(buffer.pop(), "stoic")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("st")
+        self.assertEqual(buffer.pop(), None)
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("opper")
+        self.assertEqual(buffer.pop(), "stopper")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("sto")
+        self.assertEqual(buffer.pop(), None)
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("p")
+        self.assertEqual(buffer.pop(), None)
+        self.assertTrue(buffer.matched_stop_str)
+
+    def test_falcon1(self):
+        buffer = TokenGenerationBuffer("\nUser")
+
+        buffer.append("Hi")
+        self.assertEqual(buffer.pop(), "Hi")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("!")
+        self.assertEqual(buffer.pop(), "!")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("\n")
+        self.assertEqual(buffer.pop(), None)
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("User")
+        self.assertEqual(buffer.pop(), None)
+        self.assertTrue(buffer.matched_stop_str)
+
+    def test_falcon2(self):
+        buffer = TokenGenerationBuffer("\nUser")
+
+        buffer.append("\n")
+        self.assertEqual(buffer.pop(), None)
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("\n")
+        self.assertEqual(buffer.pop(), "\n")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("\n")
+        self.assertEqual(buffer.pop(), "\n")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("\n")
+        self.assertEqual(buffer.pop(), "\n")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("User")
+        self.assertEqual(buffer.pop(), None)
+        self.assertEqual(buffer.pop(), None)
+        self.assertTrue(buffer.matched_stop_str)
+
+    def test_no_stop_str(self):
+        buffer = TokenGenerationBuffer()
+
+        buffer.append("hello")
+        self.assertEqual(buffer.pop(), "hello")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("world")
+        self.assertEqual(buffer.pop(), "world")
+        self.assertFalse(buffer.matched_stop_str)
+
+        buffer.append("\n")
+        self.assertEqual(buffer.pop(), "\n")
+        self.assertFalse(buffer.matched_stop_str)
+
+
+
+
+if __name__ == "__main__":
+    unittest.main()
