@@ -162,12 +162,6 @@ def run_inference(
         stopped = np.logical_or(old_stopped, np.array([True if token[0] in stop_token_ids else False for token in tokens]))
         different_indices = np.where(stopped != old_stopped)[0]
 
-        if different_indices.size > 0:
-            # here i but not i+1 is because the i+1 token generated is in stop_token_ids
-            for j in different_indices:
-                result[j].response_length = i
-                result[j].output = output[j]
-
         rfind_start = 0
         output = tokenizer.batch_decode(
             output_ids,
@@ -176,6 +170,12 @@ def run_inference(
             clean_up_tokenization_spaces=True,
         )
         output_np = np.array(output)
+
+        if different_indices.size > 0:
+            # here i but not i+1 is because the i+1 token generated is in stop_token_ids
+            for j in different_indices:
+                result[j].response_length = i
+                result[j].output = output[j]
 
         # deal with stop_str
         if stop_str:
