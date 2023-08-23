@@ -147,6 +147,10 @@ def run_inference(
         else:
             last_token_logits = logits[:, -1, :]
 
+        # handle unexpected Nan issue for llama 2 7b chat
+        if torch.any(torch.isnan(last_token_logits)) == True:
+            return []
+        
         if temperature < 1e-5 or top_p < 1e-8:  # greedy
             _, indices = torch.topk(last_token_logits, 2)
             tokens = [[int(token) for token in query] for query in indices.tolist()]
@@ -172,7 +176,7 @@ def run_inference(
         output_np = np.array(output)
 
         if different_indices.size > 0:
-            # here i but not i+1 is because the i+1 token generated is in stop_token_ids
+        # here i but not i+1 is because the i+1 token generated is in stop_token_ids
             for j in different_indices:
                 result[j].response_length = i
                 result[j].output = output[j]
@@ -215,6 +219,9 @@ def run_inference(
 
     return result
 
+def write_error_to_file(filename, error_message):
+    with open(filename, 'a') as file:
+        file.write(error_message + '\n')
 
 def main(
     model_path: str,
@@ -395,35 +402,35 @@ def main(
         results = run_inference(model, tokenizer, gen_params, device="cuda", context_len=2048)
         measurements = monitor.end_window("inference")
         #################################################
-        
-        # Record numbers.
-        if not is_warmup:
-            response_length = sum([result.response_length for result in results])  # number of valid tokens
-            latency = measurements.time
-            throughput = response_length / latency
-            energy = measurements.total_energy
-            output = {
-                "model": model_name_cleaned,
-                "throughput": throughput,
-                "response_length": response_length,
-                "latency": latency,
-                "energy": energy,
-                "input": [prompt.strip() for prompt in prompts],
-                "output": [(result.output).strip() for result in results],
-            }
-            output_str = json.dumps(output, indent=4)
+        if results:
+            # Record numbers.
             if not is_warmup:
-                if not is_first:
-                    output_json.write(",\n" + output_str)
-                else:
-                    is_first = False
-                    output_json.write(output_str)
-            output_json.flush()
+                response_length = sum([result.response_length for result in results])  # number of valid tokens
+                latency = measurements.time
+                throughput = response_length / latency
+                energy = measurements.total_energy
+                output = {
+                    "model": model_name_cleaned,
+                    "throughput": throughput,
+                    "response_length": response_length,
+                    "latency": latency,
+                    "energy": energy,
+                    "input": [prompt.strip() for prompt in prompts],
+                    "output": [(result.output).strip() for result in results],
+                }
+                output_str = json.dumps(output, indent=4)
+                if not is_warmup:
+                    if not is_first:
+                        output_json.write(",\n" + output_str)
+                    else:
+                        is_first = False
+                        output_json.write(output_str)
+                output_json.flush()
 
-        # Print the response.
-        for i in range(len(convs)):
-            console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Response[/u cyan](batch_{i}):")
-            console.print(results[i].output.strip() + "\n", markup=False)
+            # Print the response.
+            for i in range(len(convs)):
+                console.print(f"\n[u cyan]{'Warmup ' if is_warmup else ''}Response[/u cyan](batch_{i}):")
+                console.print(results[i].output.strip() + "\n", markup=False)
 
         # Print measurement.
         console.print(measurements)
