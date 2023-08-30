@@ -10,10 +10,12 @@ from text_generation.errors import OverloadedError, UnknownError, ValidationErro
 
 from spitfight.log import get_logger, init_queued_root_logger, shutdown_queued_root_loggers
 from spitfight.colosseum.common import (
+    COLOSSEUM_MODELS_ROUTE,
     COLOSSEUM_PROMPT_ROUTE,
     COLOSSEUM_RESP_VOTE_ROUTE,
     COLOSSEUM_ENERGY_VOTE_ROUTE,
     COLOSSEUM_HEALTH_ROUTE,
+    ModelsResponse,
     PromptRequest,
     ResponseVoteRequest,
     ResponseVoteResponse,
@@ -67,12 +69,21 @@ async def shutdown_event():
     get_global_controller().shutdown()
     shutdown_queued_root_loggers()
 
+@app.get(COLOSSEUM_MODELS_ROUTE, response_model=ModelsResponse)
+async def models(controller: Controller = Depends(get_global_controller)):
+    return ModelsResponse(available_models=controller.get_available_models())
+
 @app.post(COLOSSEUM_PROMPT_ROUTE)
 async def prompt(
     request: PromptRequest,
     controller: Controller = Depends(get_global_controller),
 ):
-    generator = controller.prompt(request.request_id, request.prompt, request.model_index)
+    generator = controller.prompt(
+        request.request_id,
+        request.prompt,
+        request.model_index,
+        request.model_preference,
+    )
 
     # First try to get the first token in order to catch TGI errors.
     try:

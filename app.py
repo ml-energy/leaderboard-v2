@@ -363,6 +363,12 @@ Every benchmark is limited in some sense -- Before you interpret the results, pl
 controller_addr = os.environ["COLOSSEUM_CONTROLLER_ADDR"]
 global_controller_client = ControllerClient(controller_addr=controller_addr, timeout=15)
 
+# Load the list of models. To reload, the app should be restarted.
+available_models = global_controller_client.get_available_models()
+model_preference_dropdown_choices = [f"One is {model}" for model in available_models]
+model_preference_dropdown_choices = ["Two random models"] + model_preference_dropdown_choices
+user_pref_to_model_name = dict(zip(model_preference_dropdown_choices, ["Random"] + available_models))
+
 # Colosseum helper functions.
 def enable_interact():
     return [gr.update(interactive=True)] * 2
@@ -394,21 +400,23 @@ def consumed_more_energy_message(energy_a, energy_b):
 
 # Colosseum event handlers
 def add_prompt_disable_submit(prompt, history_a, history_b):
-    """Add the user's prompt to the two model's history and disable the submit button."""
+    """Add the user's prompt to the two model's history and disable further submission."""
     client = global_controller_client.fork()
     return [
         gr.Textbox.update(value=" ", interactive=False),
         gr.Button.update(interactive=False),
+        gr.Dropdown.update(interactive=False),
         history_a + [[prompt, ""]],
         history_b + [[prompt, ""]],
         client,
     ]
 
-def generate_responses(client: ControllerClient, history_a, history_b):
+def generate_responses(client: ControllerClient, user_preference, history_a, history_b):
     """Generate responses for the two models."""
+    model_preference = user_pref_to_model_name[user_preference]
     for resp_a, resp_b in itertools.zip_longest(
-        client.prompt(prompt=history_a[-1][0], index=0),
-        client.prompt(prompt=history_b[-1][0], index=1),
+        client.prompt(prompt=history_a[-1][0], index=0, model_preference=model_preference),
+        client.prompt(prompt=history_b[-1][0], index=1, model_preference=model_preference),
     ):
         if resp_a is not None:
             history_a[-1][1] += resp_a
@@ -475,12 +483,14 @@ def play_again():
     return [
         # Clear chatbot history
         None, None,
-        # Turn on prompt textbox and submit button
+        # Enable prompt textbox and submit button
         gr.Textbox.update(value="", interactive=True), gr.Button.update(interactive=True),
         # Mask model names
         gr.Markdown.update(value="", visible=False), gr.Markdown.update(value="", visible=False),
         # Hide energy vote buttons and message
         gr.Button.update(visible=False), gr.Button.update(visible=False), gr.Markdown.update(visible=False),
+        # Enable model preference dropdown
+        gr.Dropdown.update(interactive=True),
         # Disable reset button
         gr.Button.update(interactive=False, visible=False),
     ]
@@ -505,6 +515,14 @@ with gr.Blocks(css=custom_css) as block:
         # Tab: Colosseum.
         with gr.TabItem("Colosseum ⚔️️"):
             gr.Markdown(open("docs/colosseum_top.md").read())
+
+            with gr.Row():
+                model_preference_dropdown = gr.Dropdown(
+                    choices=model_preference_dropdown_choices,
+                    value=model_preference_dropdown_choices[0],
+                    label="Prefer a specific model?",
+                    interactive=True,
+                )
 
             with gr.Group():
                 with gr.Row():
@@ -561,12 +579,12 @@ with gr.Blocks(css=custom_css) as block:
 
 
             (prompt_input
-                .submit(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, prompt_submit_btn, *chatbots, controller_client], queue=False)
-                .then(generate_responses, [controller_client, *chatbots], [*chatbots], queue=True, show_progress="hidden")
+                .submit(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, prompt_submit_btn, model_preference_dropdown, *chatbots, controller_client], queue=False)
+                .then(generate_responses, [controller_client, model_preference_dropdown, *chatbots], [*chatbots], queue=True, show_progress="hidden")
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
             (prompt_submit_btn
-                .click(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, prompt_submit_btn, *chatbots, controller_client], queue=False)
-                .then(generate_responses, [controller_client, *chatbots], [*chatbots], queue=True, show_progress="hidden")
+                .click(add_prompt_disable_submit, [prompt_input, *chatbots], [prompt_input, prompt_submit_btn, model_preference_dropdown, *chatbots, controller_client], queue=False)
+                .then(generate_responses, [controller_client, model_preference_dropdown, *chatbots], [*chatbots], queue=True, show_progress="hidden")
                 .then(enable_interact, None, resp_vote_btn_list, queue=False))
 
             left_resp_vote_btn.click(
@@ -599,7 +617,7 @@ with gr.Blocks(css=custom_css) as block:
                 .click(
                     play_again,
                     None,
-                    [*chatbots, prompt_input, prompt_submit_btn, *masked_model_names, *energy_vote_btn_list, energy_comparison_message, play_again_btn],
+                    [*chatbots, prompt_input, prompt_submit_btn, *masked_model_names, *energy_vote_btn_list, energy_comparison_message, model_preference_dropdown, play_again_btn],
                     queue=False,
                 )
                 .then(None, _js=focus_prompt_input_js, queue=False))

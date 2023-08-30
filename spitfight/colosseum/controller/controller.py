@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from spitfight.log import get_logger
 from spitfight.utils import BoundedExpiringDict, TokenGenerationBuffer, create_task
 from spitfight.colosseum.controller.worker import WorkerService
-from spitfight.prompt import get_system_prompt, apply_model_characteristics
+from spitfight.prompt import apply_model_characteristics
 
 if TYPE_CHECKING:
     from spitfight.colosseum.controller.router import ControllerConfig
@@ -46,6 +46,7 @@ class RequestState(BaseModel):
     request_id: str
     model_names: list[str]
     raw_prompt: str
+    model_preference: str
     responses: list[str] = ["UNSET", "UNSET"]
     model_prompts: list[str] = ["UNSET", "UNSET"]
     energy_consumptions: list[float] = [0.0, 0.0]
@@ -140,6 +141,14 @@ class Controller:
                 prev_num_req_states - len(self.request_states),
             )
 
+    def get_available_models(self) -> list[str]:
+        """Return the names of available models."""
+        return [
+            worker.model_name
+            for worker in self.worker_service.workers
+            if worker.status == "up"
+        ]
+
     def response_vote(self, request_id: str, victory_index: Literal[0, 1]) -> RequestState | None:
         """Record the user's response vote and return the new state."""
         if (state := self.request_states.get(request_id)) is not None:
@@ -165,16 +174,18 @@ class Controller:
         request_id: str,
         prompt: str,
         model_index: Literal[0, 1],
+        model_preference: str,
     ) -> AsyncGenerator[bytes, None]:
         # This method is called twice for the same request, once for each model.
         # If it's the first time this method is called, assign models to the request.
         if request_id not in self.request_states:
-            workers = self.worker_service.choose_two()
+            workers = self.worker_service.choose_based_on_preference(model_preference)
             model_names = [worker.model_name for worker in workers]
             self.request_states[request_id] = RequestState(
                 request_id=request_id,
                 raw_prompt=prompt,
                 model_names=model_names,
+                model_preference=model_preference,
             )
         request_state = self.request_states[request_id]
         model_name = request_state.model_names[model_index]

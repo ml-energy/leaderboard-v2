@@ -19,7 +19,7 @@ class Worker(BaseModel):
     hostname: str
     # For TGI, this would always be 80.
     port: int
-    # User-friendly model name, e.g. "metaai/llama2-13b-chat".
+    # User-friendly model name, e.g. "Llama2-7B".
     model_name: str
     # Hugging Face model ID, e.g. "metaai/Llama-2-13b-chat-hf".
     model_id: str
@@ -145,6 +145,21 @@ class WorkerService:
             raise ValueError("Not enough live workers to choose from.")
         worker_a, worker_b = random.sample(live_workers, 2)
         return worker_a, worker_b
+
+    def choose_based_on_preference(self, preference: str) -> tuple[Worker, Worker]:
+        """Choose two different workers based on user preference.
+
+        Specifically, if `preference` is `"Random"`, this is equivalent to
+        choosing two models at random. Otherwise, if `preference` is a model
+        name, this is equivalent to choosing that model and another model at
+        random. In that case, the order of the two models is also randomized.
+        """
+        if preference == "Random":
+            return self.choose_two()
+        else:
+            worker_a = self.get_worker(preference)
+            worker_b = random.choice([worker for worker in self.workers if worker != worker_a])
+            return tuple(random.sample([worker_a, worker_b], 2))
 
     async def check_workers(self) -> None:
         """Check the status of all workers."""

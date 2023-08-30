@@ -9,9 +9,11 @@ import requests
 import gradio as gr
 
 from spitfight.colosseum.common import (
+    COLOSSEUM_MODELS_ROUTE,
     COLOSSEUM_PROMPT_ROUTE,
     COLOSSEUM_RESP_VOTE_ROUTE,
     COLOSSEUM_ENERGY_VOTE_ROUTE,
+    ModelsResponse,
     PromptRequest,
     ResponseVoteRequest,
     ResponseVoteResponse,
@@ -37,9 +39,33 @@ class ControllerClient:
             request_id=uuid4(),
         )
 
-    def prompt(self, prompt: str, index: Literal[0, 1]) -> Generator[str, None, None]:
-        """Generate the response of the `index`th model with the prompt."""
-        prompt_request = PromptRequest(request_id=self.request_id, prompt=prompt, model_index=index)
+    def get_available_models(self) -> list[str]:
+        """Retrieve the list of available models."""
+        with _catch_requests_exceptions():
+            resp = requests.get(
+                f"http://{self.controller_addr}{COLOSSEUM_MODELS_ROUTE}",
+                timeout=self.timeout,
+            )
+        _check_response(resp)
+        return ModelsResponse(**resp.json()).available_models
+
+    def prompt(
+        self,
+        prompt: str,
+        index: Literal[0, 1],
+        model_preference: str,
+    ) -> Generator[str, None, None]:
+        """Generate the response of the `index`th model with the prompt.
+
+        `user_pref` is the user's preference for the model to use. It can be
+        `"random"` or one of the models in the list returned by `get_available_models`.
+        """
+        prompt_request = PromptRequest(
+            request_id=self.request_id,
+            prompt=prompt,
+            model_index=index,
+            model_preference=model_preference,
+        )
         with _catch_requests_exceptions():
             resp = requests.post(
                 f"http://{self.controller_addr}{COLOSSEUM_PROMPT_ROUTE}",
