@@ -379,7 +379,7 @@ def main(
     
     for is_warmup, input_prompts in data_iter:
         # Construct the input prompt.
-        for i in range(len(input_prompts)):
+        for i in range(batch):
             conv = copy.deepcopy(conv_base)
             conv.append_message(conv.roles[0], input_prompts[i])
             conv.append_message(conv.roles[1], "")
