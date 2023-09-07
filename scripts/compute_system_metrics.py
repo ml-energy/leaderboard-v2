@@ -21,9 +21,12 @@ def main(data_dir: str, out_file: str) -> None:
         for benchmark_file in glob(f"{data_dir}/{model_name}/benchmark_batch_*.json"):
             batch_size = int(benchmark_file.split("_")[-1][:-5])
             df = pd.read_json(benchmark_file)
-            out_csv.writerow(
-                [model_name.replace("--", "/"), str(batch_size)] + df[metrics].mean().to_list(),
-            )
+            if len(df) < 100:
+                out_csv.writerow([model_name.replace("--", "/"), str(batch_size)] + ["OOM"])
+            else:
+                out_csv.writerow(
+                    [model_name.replace("--", "/"), str(batch_size)] + df[metrics].mean().to_list(),
+                )
 
 
 if __name__ == "__main__":
