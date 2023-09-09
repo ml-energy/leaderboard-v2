@@ -216,7 +216,7 @@ def run_inference(
 
         # deal with stop_str
         if stop_str:
-            stop_str_length = np.zeros(batch_size, dtpe=int)
+            stop_str_length = np.zeros(batch_size, dtype=int)
             if isinstance(stop_str, str):
                 pos_array = np.char.rfind(output_np, stop_str, rfind_start)
                 find_stop = pos_array != -1
