@@ -106,7 +106,8 @@ def run_inference(
 
     prompts_encode = tokenizer(prompts, padding=True)
     input_ids = prompts_encode.input_ids
-    attention_masks = torch.as_tensor(prompts_encode.attention_mask, device=device)
+    attention_masks = prompts_encode.attention_mask
+    
     output_ids = [[] for _ in range(batch_size)]
 
     if model.config.is_encoder_decoder:
@@ -115,6 +116,7 @@ def run_inference(
         max_src_len = context_len - max_new_tokens - 1
 
     input_ids = [input_id[-max_src_len:] for input_id in input_ids]
+    attention_masks = torch.as_tensor([attention_mask[-max_src_len:] for attention_mask in attention_masks], device=device)
 
     if model.config.is_encoder_decoder:
         encoder_output = model.encoder(
@@ -392,7 +394,7 @@ def main(
     
     for is_warmup, input_prompts in data_iter:
         # Construct the input prompt.
-        for i in range(batch_size):
+        for i in range(len(input_prompts)):
             conv = copy.deepcopy(conv_base)
             conv.append_message(conv.roles[0], input_prompts[i])
             conv.append_message(conv.roles[1], "")
