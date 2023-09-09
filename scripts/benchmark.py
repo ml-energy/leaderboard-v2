@@ -104,7 +104,9 @@ def run_inference(
         temperature, repetition_penalty, top_p, top_k
     )
 
-    input_ids = tokenizer(prompts, padding=True).input_ids
+    prompts_encode = tokenizer(prompts, padding=True)
+    input_ids = prompts_encode.input_ids
+    attention_masks = torch.as_tensor(prompts_encode.attention_mask, device=device)
     output_ids = [[] for _ in range(batch_size)]
 
     if model.config.is_encoder_decoder:
@@ -116,7 +118,8 @@ def run_inference(
 
     if model.config.is_encoder_decoder:
         encoder_output = model.encoder(
-            input_ids=torch.as_tensor(input_ids, device=device)
+            input_ids=torch.as_tensor(input_ids, device=device),
+            attention_mask=attention_masks
         )[0]
         start_ids = torch.as_tensor(
             [[model.generation_config.decoder_start_token_id] for _ in range(batch_size)],
@@ -136,7 +139,7 @@ def run_inference(
                 )
                 logits = model.lm_head(out[0])
             else:
-                out = model(torch.as_tensor(input_ids, device=device), use_cache=True)
+                out = model(torch.as_tensor(input_ids, device=device), use_cache=True, attention_mask=attention_masks)
                 logits = out.logits
             past_key_values = out.past_key_values
         else:  # decoding
@@ -157,9 +160,16 @@ def run_inference(
                     ),
                     use_cache=True,
                     past_key_values=past_key_values,
+                    attention_mask=attention_masks,
                 )
                 logits = out.logits
             past_key_values = out.past_key_values
+
+        # update attention mask
+        attention_masks = torch.cat(
+            [attention_masks, torch.ones((batch_size, 1), device=device)],
+            dim=1
+        )
 
         if logits_processor:
             if repetition_penalty > 1.0:
