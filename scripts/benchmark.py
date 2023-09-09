@@ -131,6 +131,12 @@ def run_inference(
     
     past_key_values = out = None
     stopped = np.array(batch_size*[False])
+
+    # stop string length
+    stop_str_length = np.zeros(batch_size, dtype=int)
+    if stop_str and isinstance(stop_str, str):
+        stop_str_length[:] = len(tokenizer(stop_str).input_ids)
+
     for i in range(max_new_tokens):
         if i == 0:  # prefill
             if model.config.is_encoder_decoder:
@@ -218,16 +224,14 @@ def run_inference(
 
         # deal with stop_str
         if stop_str:
-            stop_str_length = np.zeros(batch_size, dtype=int)
             if isinstance(stop_str, str):
                 pos_array = np.char.rfind(output_np, stop_str, rfind_start)
                 find_stop = pos_array != -1
-                stop_str_length[find_stop] = len(tokenizer(stop_str).input_ids)
-
             elif isinstance(stop_str, Iterable):
                 for each_stop in stop_str:
                     pos_array = np.char.rfind(output_np, each_stop, rfind_start)
                     find_stop = pos_array != -1
+                    # update stop_str_length with each stop_str_length for each request
                     stop_str_length[find_stop] = len(tokenizer(each_stop).input_ids)
             else:
                 raise ValueError("Invalid stop field type.")
@@ -235,7 +239,6 @@ def run_inference(
             stop_str_indices = np.where(find_stop & ~stopped)[0]
             if stop_str_indices.size > 0:
                 for j in stop_str_indices:
-                    # TODO: find a elegant way to figure out the size of stop_str, here just suppose stop_str has one token
                     result[j].response_length = i+1-stop_str_length[j]
                     result[j].output = output[j][:pos_array[j]]
                 stopped[find_stop] = True
