@@ -357,6 +357,11 @@ table th:first-child {
   pointer-events: none;
   opacity: 0.4;
 }
+
+/* Make the Citation header larger */
+#citation-header > div > span {
+    font-size: 16px !important;
+}
 """
 
 intro_text = """
@@ -789,6 +794,17 @@ with gr.Blocks(css=custom_css) as block:
         with gr.Tab("About"):
             # Read in LEADERBOARD.md
             gr.Markdown(open("docs/leaderboard.md").read())
+
+    # Citation
+    with gr.Accordion("📚  Citation", open=False, elem_id="citation-header"):
+        citation_text = open("docs/citation.bib").read()
+        gr.Textbox(
+            value=citation_text,
+            label="BibTeX for the leaderboard and the Zeus framework used for benchmarking:",
+            lines=len(list(filter(lambda c: c == "\n", citation_text))),
+            interactive=False,
+            show_copy_button=True,
+        )
 
     # Load the table on page load.
     block.load(on_load, outputs=[dataframe, model_preference_dropdown], queue=False)

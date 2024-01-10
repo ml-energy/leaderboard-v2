@@ -60,3 +60,25 @@ You can still run benchmarks without Pegasus like this:
 $ docker exec leaderboard0 python scripts/benchmark.py --model-path /data/leaderboard/weights/lmsys/vicuna-13B --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json
 $ docker exec leaderboard0 python scripts/benchmark.py --model-path databricks/dolly-v2-12b --input-file sharegpt/sg_90k_part1_html_cleaned_lang_first_sampled_sorted.json
 ```
+
+## Citation
+
+For the ML.ENERGY Leaderboard:
+```bibtex
+@misc{ml-energy-leaderboard,
+    author={Jae-Won Chung and Jiachen Liu and Zhiyu Wu and Yuxuan Xia and Mosharaf Chowdhury},
+    title={{ML.ENERGY} Leaderboard},
+    year={2023},
+    howpublished={\url{https://ml.energy/leaderboard}},
+}
+```
+
+For the [Zeus](https://ml.energy/zeus) framework used for benchmarking:
+```bibtex
+@inproceedings{zeus:nsdi23,
+    author={Jie You and Jae-Won Chung and Mosharaf Chowdhury},
+    booktitle={USENIX NSDI},
+    title={Zeus: Understanding and Optimizing {GPU} Energy Consumption of {DNN} Training},
+    year={2023},
+}
+```
