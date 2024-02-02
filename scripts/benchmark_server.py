@@ -2,7 +2,6 @@
    Difference with benchmark.py: integration with model hosted on dedicated inference server.
    Currently supports:
    - Hugging Face TGI (Text Generation Inference)
-   - vLLM
 
 On the server side, run one of the following commands:
     (vLLM backend)
