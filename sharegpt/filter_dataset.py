@@ -3,11 +3,16 @@
    1. Remove entries that have too long prompts or completions
    2. Only keep first human prompt for each conversation
 """
+
 import json
 from typing import AsyncGenerator, List, Tuple
 
-from transformers import (AutoTokenizer, PreTrainedTokenizer,
-                          PreTrainedTokenizerBase, PreTrainedTokenizerFast)
+from transformers import (
+    AutoTokenizer,
+    PreTrainedTokenizer,
+    PreTrainedTokenizerBase,
+    PreTrainedTokenizerFast,
+)
 
 
 def filter_dataset(
@@ -20,9 +25,14 @@ def filter_dataset(
     # Filter out the conversations with less than 2 turns.
     dataset = [data for data in dataset if len(data["conversations"]) >= 2]
     # Only keep the first two turns of each conversation.
-    dataset = [(data["id"],
-                data["conversations"][0]["value"],
-                data["conversations"][1]["value"]) for data in dataset]
+    dataset = [
+        (
+            data["id"],
+            data["conversations"][0]["value"],
+            data["conversations"][1]["value"],
+        )
+        for data in dataset
+    ]
 
     # Tokenize the prompts and completions.
     conversation_ids = [conv_id for conv_id, _, _ in dataset]
@@ -33,10 +43,12 @@ def filter_dataset(
     tokenized_dataset = []
     for i in range(len(dataset)):
         output_len = len(completion_token_ids[i])
-        tokenized_dataset.append((conversation_ids[i], prompts[i], prompt_token_ids[i], output_len))
+        tokenized_dataset.append(
+            (conversation_ids[i], prompts[i], prompt_token_ids[i], output_len)
+        )
 
     # Filter out too long sequences.
-    filtered_dataset_json= []
+    filtered_dataset_json = []
     for conv_id, prompt, prompt_token_ids, output_len in tokenized_dataset:
         prompt_len = len(prompt_token_ids)
         if prompt_len < 4 or output_len < 4:
@@ -47,21 +59,27 @@ def filter_dataset(
         if prompt_len > 1024 or prompt_len + output_len > 2048:
             # Prune too long sequences.
             continue
-        filtered_dataset_json.append({
-            "id": conv_id,
-            "conversations": [{
-                "from": "human",
-                "value": prompt,
-            }]
-        })
+        filtered_dataset_json.append(
+            {
+                "id": conv_id,
+                "conversations": [
+                    {
+                        "from": "human",
+                        "value": prompt,
+                    }
+                ],
+            }
+        )
 
     return filtered_dataset_json
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained('huggyllama/llama-7b')
-    filtered_dataset = filter_dataset('ShareGPT_V3_unfiltered_cleaned_split.json', tokenizer)
-    with open('filtered_dataset.json', 'w') as f:
+    tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
+    filtered_dataset = filter_dataset(
+        "ShareGPT_V3_unfiltered_cleaned_split.json", tokenizer
+    )
+    with open("filtered_dataset.json", "w") as f:
         json.dump(filtered_dataset, f)
 
 
