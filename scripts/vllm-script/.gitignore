@@ -1,2 +1,4 @@
 data
-testing*
+test*
+Dockerfile
+requirements.txt
