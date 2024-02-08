@@ -1,9 +1,5 @@
 """Taken and modified from vllm: https://github.com/vllm-project/vllm/blob/93b38bea5dd03e1b140ca997dfaadef86f8f1855/benchmarks/benchmark_serving.py
-   Difference with benchmark.py: integration with model hosted on dedicated inference server.
-   Currently supports:
-   - Hugging Face TGI (Text Generation Inference)
-   TODO:
-   - vLLM
+   Identical to benchmark_server.py, but additionally calculates total energy as reported by Zeus.
 """
 
 import argparse
@@ -16,6 +12,7 @@ from typing import AsyncGenerator, List, Tuple
 import aiohttp
 import numpy as np
 from tqdm.asyncio import tqdm
+from zeus.monitor import ZeusMonitor
 
 # (prompt len, output len, latency)
 REQUEST_LATENCY: List[Tuple[int, int, float]] = []
@@ -145,6 +142,9 @@ def main(args: argparse.Namespace):
     api_url = f"{args.protocol}://{args.host}:{args.port}{args.endpoint}"
     input_requests = sample_requests(args.dataset, args.num_prompts)
 
+    # Assumes TGI/vLLM is running on gpu 0
+    zeus_monitor = ZeusMonitor(gpu_indices=[0], approx_instant_energy=True)
+    zeus_monitor.begin_window("benchmark")
     benchmark_start_time = time.perf_counter()
     asyncio.run(
         benchmark(
@@ -155,6 +155,9 @@ def main(args: argparse.Namespace):
             args.request_rate,
         )
     )
+    measurements = zeus_monitor.end_window("benchmark")
+    zeus_total_energy = measurements.total_energy
+
     benchmark_end_time = time.perf_counter()
     benchmark_time = benchmark_end_time - benchmark_start_time
     print(f"Total time: {benchmark_time:.2f} s")
@@ -176,12 +179,20 @@ def main(args: argparse.Namespace):
     print("Average latency per output token: " f"{avg_per_output_token_latency:.2f} s")
 
     # Compute the energy statistics
-    print(f"Total energy: {TOTAL_ENERGY:.2f} J")
+    print(f"Zeus: Total energy: {zeus_total_energy:.2f} J")
+    print(f"Individual response: Total energy: {TOTAL_ENERGY:.2f} J")
+    print(f"Total prompt tokens: {TOTAL_PROMPT_TOKENS}")
+    print(f"Total completion tokens: {TOTAL_COMPLETION_TOKENS}")
+
+    print("Based on Zeus")
+    print(f"Energy per request: {zeus_total_energy / len(input_requests):.2f} J")
+    energy_per_token = zeus_total_energy / TOTAL_COMPLETION_TOKENS
+    print(f"Energy per token: {energy_per_token:.2f} J")
+
+    print("Based on individual responses")
     print(f"Energy per request: {TOTAL_ENERGY / len(input_requests):.2f} J")
     energy_per_token = TOTAL_ENERGY / TOTAL_COMPLETION_TOKENS
     print(f"Energy per token: {energy_per_token:.2f} J")
-    print(f"Total prompt tokens: {TOTAL_PROMPT_TOKENS}")
-    print(f"Total completion tokens: {TOTAL_COMPLETION_TOKENS}")
 
 
 if __name__ == "__main__":

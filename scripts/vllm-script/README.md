@@ -11,6 +11,7 @@ docker run --gpus all --shm-size 1g -p 8000:80 \
         --tokenizer-config-path /app/tokenizer_config.json \
         --model-id meta-llama/Llama-2-7b-chat-hf
 ```
+Make sure to use `--gpus device=0` if using `benchmark_server_zeus.py`.
 
 # client side: run benchmark script
 ```
