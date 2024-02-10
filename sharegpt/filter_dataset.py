@@ -5,6 +5,7 @@
 """
 
 import json
+import random
 from typing import AsyncGenerator, List, Tuple
 
 from transformers import (
@@ -13,6 +14,17 @@ from transformers import (
     PreTrainedTokenizerBase,
     PreTrainedTokenizerFast,
 )
+
+def filter_dataset_to_size(
+    dataset_path: str,
+    size: int,
+) ->  List[Tuple[str, int, int]]:
+    # Load the dataset.
+    with open(dataset_path) as f:
+        dataset = json.load(f)
+    
+    # randomly sample dataset
+    return random.sample(dataset, size)
 
 
 def filter_dataset(
@@ -56,7 +68,9 @@ def filter_dataset(
             # This is because TGI causes errors when the input or output length
             # is too short.
             continue
-        if prompt_len > 1024 or prompt_len + output_len > 2048:
+        # making even shorter than 1024 to account for additional tokens introduced by chat completion wrapper
+        if prompt_len > 800 or output_len > 800:
+        # if prompt_len > 1024 or output_len > 1024:
             # Prune too long sequences.
             continue
         filtered_dataset_json.append(
@@ -75,12 +89,20 @@ def filter_dataset(
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
-    filtered_dataset = filter_dataset(
-        "ShareGPT_V3_unfiltered_cleaned_split.json", tokenizer
+    # tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
+    # new_dataset = filter_dataset(
+    #     "ShareGPT_V3_unfiltered_cleaned_split.json", tokenizer
+    # )
+    # with open("ShareGPT_V3_filtered.json", "w") as f:
+    #     json.dump(new_dataset, f)
+
+    new_dataset = filter_dataset_to_size(
+        "ShareGPT_V3_filtered.json", 1000
     )
-    with open("filtered_dataset.json", "w") as f:
-        json.dump(filtered_dataset, f)
+    with open("ShareGPT_V3_filtered_1000.json", "w") as f:
+        json.dump(new_dataset, f)
+
+    print(f"New dataset size: {len(new_dataset)}")
 
 
 if __name__ == "__main__":

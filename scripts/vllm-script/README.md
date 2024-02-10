@@ -15,12 +15,13 @@ Make sure to use `--gpus device=0` if using `benchmark_server_zeus.py`.
 
 # client side: run benchmark script
 ```
-python benchmark_server.py \
+python benchmark_server_zeus.py \
         --backend tgi \
-        --dataset ../../sharegpt/ShareGPT_V3_filtered.json \
-        --model meta-llama/Llama-2-7b-hf \
-        --host 127.0.0.1 \
-        --num-prompts 2  # default=1000
+        --dataset ../../sharegpt/ShareGPT_V3_filtered_2000.json \
+        --port 8000 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /home/ohjun/leaderboard/scripts/vllm-script/results/llama2-7b_gpu0_rr1.txt \
+        --request-rate 0.25
 ```
 
 # client side: docker way (need to use docker network here and on backend)
@@ -45,11 +46,19 @@ CLI:
 ```
 docker build -t benchmark:latest .
 docker run \
+        --gpus device=0 \
+        --name llama7 \
+        --network benchmark-net \
         -v /home/ohjun/leaderboard/sharegpt:/data \
-        benchmark:latest \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
         --backend tgi \
-        --dataset /data/ShareGPT_V3_filtered.json \
-        --model meta-llama/Llama-2-7b-hf \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi \
+        --port 80 \
+        --model mistralai/Mistral-7B-Instruct-v0.2 \
+        --out-filename /results/llama-7b_gpu0_rr025.txt \
+        --request-rate 0.25
 ```
 
 # requirements.txt
