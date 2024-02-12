@@ -1,9 +1,5 @@
 """Taken and modified from vllm: https://github.com/vllm-project/vllm/blob/93b38bea5dd03e1b140ca997dfaadef86f8f1855/benchmarks/benchmark_serving.py
-   Difference with benchmark.py: integration with model hosted on dedicated inference server.
-   Currently supports:
-   - Hugging Face TGI (Text Generation Inference)
-   TODO:
-   - vLLM
+   Identical to benchmark_server.py, but additionally calculates total energy as reported by Zeus.
 """
 
 import argparse
@@ -11,11 +7,13 @@ import asyncio
 import json
 import random
 import time
+import torch
 from typing import AsyncGenerator, List, Tuple
 
 import aiohttp
 import numpy as np
 from tqdm.asyncio import tqdm
+from zeus.monitor import ZeusMonitor
 
 # (prompt len, output len, latency)
 REQUEST_LATENCY: List[Tuple[int, int, float]] = []
@@ -23,6 +21,25 @@ SYSTEM_PROMPT = "A chat between a human user (prompter) and an artificial intell
 TOTAL_ENERGY = 0
 TOTAL_PROMPT_TOKENS = 0
 TOTAL_COMPLETION_TOKENS = 0
+
+
+# @dataclass
+# class Results:
+#     total_time: float
+#     total_energy: float
+#     time_per_request: float
+#     time_per_token: float
+#     energy_per_request: float
+#     energy_per_token: float
+#     results: list[Result]
+#     ? server: str ? (tgi vs vllm) TODO
+
+# @dataclass
+# class Result:in py
+#     prompt: str
+#     response: str
+#     prompt_len_in_tokens: int
+#     response_len_in_tokens: int
 
 
 def get_requests(
@@ -66,7 +83,7 @@ async def send_request(
     # headers = {"User-Agent": "Benchmark Client"}
     headers = {"Content-Type": "application/json"}
     # Both tgi and vllm support OpenAI Chat Completion API
-    if backend == "tgi" or "vllm":
+    if backend in ["tgi" or "vllm"]:
         pload = {
             "model": model,
             "messages": [
@@ -95,9 +112,6 @@ async def send_request(
 
     request_end_time = time.perf_counter()
     request_latency = request_end_time - request_start_time
-    # TODO: understand why "global REQUEST_LATENCY" isn't required for this
-    #       same with SYSTEM_PROMPT above
-    #       TOTAL_ENERGY, etc. says "local variable 'TOTAL_ENERGY' referenced before assignment" without declaring global
     REQUEST_LATENCY.append(
         (
             output["usage"]["prompt_tokens"],
@@ -134,14 +148,9 @@ async def benchmark(
     pbar.close()
 
 
-def main(args: argparse.Namespace):
-    print(args)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-
-    api_url = f"{args.protocol}://{args.host}:{args.port}{args.endpoint}"
-    input_requests = get_requests(args.dataset)
-
+def run_benchmark(args: argparse.Namespace, api_url: str, input_requests: List[str], out_filename: str):
+    zeus_monitor = ZeusMonitor()
+    zeus_monitor.begin_window(out_filename)
     benchmark_start_time = time.perf_counter()
     asyncio.run(
         benchmark(
@@ -153,8 +162,9 @@ def main(args: argparse.Namespace):
         )
     )
     benchmark_end_time = time.perf_counter()
+    measurements = zeus_monitor.end_window(out_filename)
+    zeus_total_energy = measurements.total_energy
 
-    out_filename = args.out_filename
     with open(out_filename, "w") as f:
         benchmark_time = benchmark_end_time - benchmark_start_time
         f.write(f"Total time: {benchmark_time:.2f} s\n")
@@ -176,14 +186,42 @@ def main(args: argparse.Namespace):
         f.write("Average latency per output token: " f"{avg_per_output_token_latency:.2f} s\n\n")
 
         # Compute the energy statistics
-        f.write(f"Total energy: {TOTAL_ENERGY:.2f} J\n")
+        f.write(f"Total energy (Zeus): {zeus_total_energy:.2f} J\n")
+        f.write(f"Total energy (Individual responses): {TOTAL_ENERGY:.2f} J\n")
+        f.write(f"Total prompt tokens: {TOTAL_PROMPT_TOKENS}\n")
+        f.write(f"Total completion tokens: {TOTAL_COMPLETION_TOKENS}\n\n")
+
+        f.write("Based on Zeus\n")
+        f.write(f"Energy per request: {zeus_total_energy / len(input_requests):.2f} J\n")
+        energy_per_token = zeus_total_energy / TOTAL_COMPLETION_TOKENS
+        f.write(f"Energy per token: {energy_per_token:.2f} J\n\n")
+
+        f.write("Based on individual responses\n")
         f.write(f"Energy per request: {TOTAL_ENERGY / len(input_requests):.2f} J\n")
         energy_per_token = TOTAL_ENERGY / TOTAL_COMPLETION_TOKENS
-        f.write(f"Energy per token: {energy_per_token:.2f} J\n")
-        f.write(f"Total prompt tokens: {TOTAL_PROMPT_TOKENS}\n")
-        f.write(f"Total completion tokens: {TOTAL_COMPLETION_TOKENS}\n")
+        f.write(f"Energy per token: {energy_per_token:.2f} J\n\n")
+
+        # reset global variables
+        REQUEST_LATENCY = []
+        TOTAL_ENERGY = 0
+        TOTAL_PROMPT_TOKENS = 0
+        TOTAL_COMPLETION_TOKENS = 0
 
     print("Benchmark results written to", out_filename)
+
+
+def main(args: argparse.Namespace):
+    print(args)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+
+    out_filename = args.out_filename
+    api_url = f"{args.protocol}://{args.host}:{args.port}{args.endpoint}"
+    input_requests = get_requests(args.dataset)
+
+    # run multiple times to warm up
+    for i in range(arg.num_runs):
+        run_benchmark(args, api_url, input_requests, out_filename+f"-run{i}.txt")
 
 
 if __name__ == "__main__":
@@ -201,16 +239,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset", type=str, required=True, help="Path to the dataset."
     )
-    # parser.add_argument(
-    #     "--best-of",
-    #     type=int,
-    #     default=1,
-    #     help="Generates `best_of` sequences per prompt and " "returns the best one.",
-    # )
-    # parser.add_argument("--use-beam-search", action="store_true")
-    # parser.add_argument(
-    #     "--num-prompts", type=int, default=1000, help="Number of prompts to process."
-    # )
+    parser.add_argument(
+        "--num-runs",
+        type=int,
+        default=3,
+        help="Runs the benchmark num-runs times, writing results to 3 separate files.",
+    )
     parser.add_argument(
         "--request-rate",
         type=float,

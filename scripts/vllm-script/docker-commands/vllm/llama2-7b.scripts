@@ -1,0 +1,115 @@
+#!/bin/bash
+### Llama-2-7b
+
+############################## GPU 0 ##############################
+# vllm
+docker run --gpus device=0 --shm-size 1g -p 8000:80 \
+        --runtime nvidia \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v ~/.cache/huggingface:/root/.cache/huggingface \
+        --name vllm0_llama7 \
+        -d vllm/vllm-openai:latest \
+        --tensor-parallel-size 1 \
+        --model meta-llama/Llama-2-7b-chat-hf
+
+# Benchmark
+docker run \
+        --gpus device=0 \
+        --name llama7_25 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm0_llama7 \
+        --port 80 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr025 \
+        --request-rate 0.25
+
+############################## GPU 1 ##############################
+# vllm
+docker run --gpus device=1 --shm-size 1g -p 8001:80 \
+        --runtime nvidia \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v ~/.cache/huggingface:/root/.cache/huggingface \
+        --name vllm1_llama7 \
+        -d vllm/vllm-openai:latest \
+        --tensor-parallel-size 1 \
+        --model meta-llama/Llama-2-7b-chat-hf
+
+# Benchmark
+docker run \
+        --gpus device=1 \
+        --name llama7_50 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm1_llama7 \
+        --port 80 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr050 \
+        --request-rate 0.5
+
+
+############################## GPU 2 ##############################
+# vllm
+docker run --gpus device=2 --shm-size 1g -p 8002:80 \
+        --runtime nvidia \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v ~/.cache/huggingface:/root/.cache/huggingface \
+        --name vllm2_llama7 \
+        -d vllm/vllm-openai:latest \
+        --tensor-parallel-size 1 \
+        --model meta-llama/Llama-2-7b-chat-hf
+
+# Benchmark
+docker run \
+        --gpus device=2 \
+        --name llama7_75 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm2_llama7 \
+        --port 80 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr075 \
+        --request-rate 0.75
+
+############################## GPU 3 ##############################
+# vllm
+docker run --gpus device=3 --shm-size 1g -p 8003:80 \
+        --runtime nvidia \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v ~/.cache/huggingface:/root/.cache/huggingface \
+        --name vllm3_llama7 \
+        -d vllm/vllm-openai:latest \
+        --tensor-parallel-size 1 \
+        --model meta-llama/Llama-2-7b-chat-hf
+
+# Benchmark
+docker run \
+        --gpus device=3 \
+        --name llama7_1 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm3_llama7 \
+        --port 80 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr100 \
+        --request-rate 1

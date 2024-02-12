@@ -1,5 +1,8 @@
 """Taken and modified from vllm: https://github.com/vllm-project/vllm/blob/93b38bea5dd03e1b140ca997dfaadef86f8f1855/benchmarks/benchmark_serving.py
-   Identical to benchmark_server.py, but additionally calculates total energy as reported by Zeus.
+   Calculates total energy as reported by Zeus and by individual responses from server.
+   Currently supports:
+   - Hugging Face TGI (Text Generation Inference)
+   - vLLM
 """
 
 import argparse
@@ -18,7 +21,6 @@ from zeus.monitor import ZeusMonitor
 # (prompt len, output len, latency)
 REQUEST_LATENCY: List[Tuple[int, int, float]] = []
 SYSTEM_PROMPT = "A chat between a human user (prompter) and an artificial intelligence (AI) assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. "
-TOTAL_ENERGY = 0
 TOTAL_PROMPT_TOKENS = 0
 TOTAL_COMPLETION_TOKENS = 0
 
@@ -64,7 +66,7 @@ async def send_request(
     # headers = {"User-Agent": "Benchmark Client"}
     headers = {"Content-Type": "application/json"}
     # Both tgi and vllm support OpenAI Chat Completion API
-    if backend == "tgi" or "vllm":
+    if backend in ["tgi" or "vllm"]:
         pload = {
             "model": model,
             "messages": [
@@ -93,9 +95,6 @@ async def send_request(
 
     request_end_time = time.perf_counter()
     request_latency = request_end_time - request_start_time
-    # TODO: understand why "global REQUEST_LATENCY" isn't required for this
-    #       same with SYSTEM_PROMPT above
-    #       TOTAL_ENERGY, etc. says "local variable 'TOTAL_ENERGY' referenced before assignment" without declaring global
     REQUEST_LATENCY.append(
         (
             output["usage"]["prompt_tokens"],
@@ -105,10 +104,8 @@ async def send_request(
     )
 
     # track energy usage
-    global TOTAL_ENERGY
     global TOTAL_PROMPT_TOKENS
     global TOTAL_COMPLETION_TOKENS
-    TOTAL_ENERGY += output["usage"]["energy"]
     TOTAL_PROMPT_TOKENS += output["usage"]["prompt_tokens"]
     TOTAL_COMPLETION_TOKENS += output["usage"]["completion_tokens"]
 
@@ -140,7 +137,7 @@ def main(args: argparse.Namespace):
     api_url = f"{args.protocol}://{args.host}:{args.port}{args.endpoint}"
     input_requests = get_requests(args.dataset)
 
-    # zeus_monitor = ZeusMonitor(gpu_indices=[0], approx_instant_energy=True)
+
     zeus_monitor = ZeusMonitor()
     zeus_monitor.begin_window("benchmark")
     benchmark_start_time = time.perf_counter()
@@ -153,9 +150,9 @@ def main(args: argparse.Namespace):
             args.request_rate,
         )
     )
+    benchmark_end_time = time.perf_counter()
     measurements = zeus_monitor.end_window("benchmark")
     zeus_total_energy = measurements.total_energy
-    benchmark_end_time = time.perf_counter()
 
     out_filename = args.out_filename
     with open(out_filename, "w") as f:
@@ -180,18 +177,12 @@ def main(args: argparse.Namespace):
 
         # Compute the energy statistics
         f.write(f"Total energy (Zeus): {zeus_total_energy:.2f} J\n")
-        f.write(f"Total energy (Individual responses): {TOTAL_ENERGY:.2f} J\n")
         f.write(f"Total prompt tokens: {TOTAL_PROMPT_TOKENS}\n")
         f.write(f"Total completion tokens: {TOTAL_COMPLETION_TOKENS}\n\n")
 
         f.write("Based on Zeus\n")
         f.write(f"Energy per request: {zeus_total_energy / len(input_requests):.2f} J\n")
         energy_per_token = zeus_total_energy / TOTAL_COMPLETION_TOKENS
-        f.write(f"Energy per token: {energy_per_token:.2f} J\n\n")
-
-        f.write("Based on individual responses\n")
-        f.write(f"Energy per request: {TOTAL_ENERGY / len(input_requests):.2f} J\n")
-        energy_per_token = TOTAL_ENERGY / TOTAL_COMPLETION_TOKENS
         f.write(f"Energy per token: {energy_per_token:.2f} J\n\n")
 
     print("Benchmark results written to", out_filename)

@@ -1,0 +1,117 @@
+#!/bin/bash
+### Mistral-7b
+
+############################## GPU 0 ##############################
+# TGI
+docker run --gpus device=0 --shm-size 1g -p 8000:80 \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v $PWD/mistral-7b-tokenizer_config-modified.json:/app/tokenizer_config.json \
+        --name tgi0_mistral \
+        -d tgi \
+        --tokenizer-config-path /app/tokenizer_config.json \
+        --num-shard 1 \
+        --model-id mistralai/Mistral-7B-Instruct-v0.2
+
+# Benchmark
+docker run \
+        --gpus device=0 \
+        --name mistral7_25 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi0_mistral \
+        --port 80 \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr025 \
+        --request-rate 0.25
+
+
+############################## GPU 1 ##############################
+# TGI
+docker run --gpus device=1 --shm-size 1g -p 8001:80 \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v $PWD/mistral-7b-tokenizer_config-modified.json:/app/tokenizer_config.json \
+        --name tgi1_mistral \
+        -d tgi \
+        --tokenizer-config-path /app/tokenizer_config.json \
+        --num-shard 1 \
+        --model-id mistralai/Mistral-7B-Instruct-v0.2
+
+# Benchmark
+docker run \
+        --gpus device=1 \
+        --name mistral7_50 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi1_mistral \
+        --port 80 \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr050 \
+        --request-rate 0.5
+
+
+############################## GPU 2 ##############################
+# TGI
+docker run --gpus device=2 --shm-size 1g -p 8002:80 \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v $PWD/mistral-7b-tokenizer_config-modified.json:/app/tokenizer_config.json \
+        --name tgi2_mistral \
+        -d tgi \
+        --tokenizer-config-path /app/tokenizer_config.json \
+        --num-shard 1 \
+        --model-id mistralai/Mistral-7B-Instruct-v0.2
+
+# Benchmark
+docker run \
+        --gpus device=2 \
+        --name mistral7_75 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi2_mistral \
+        --port 80 \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr075 \
+        --request-rate 0.75
+
+
+############################## GPU 3 ##############################
+# TGI
+docker run --gpus device=3 --shm-size 1g -p 8003:80 \
+        --network benchmark-net \
+        -e HUGGING_FACE_HUB_TOKEN=$token \
+        -v $PWD/mistral-7b-tokenizer_config-modified.json:/app/tokenizer_config.json \
+        --name tgi3_mistral \
+        -d tgi \
+        --tokenizer-config-path /app/tokenizer_config.json \
+        --num-shard 1 \
+        --model-id mistralai/Mistral-7B-Instruct-v0.2
+
+# Benchmark
+docker run \
+        --gpus device=3 \
+        --name mistral7_1 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi3_mistral \
+        --port 80 \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr100 \
+        --request-rate 1

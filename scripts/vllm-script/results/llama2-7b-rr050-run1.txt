@@ -1,0 +1,20 @@
+Total time: 2164.69 s
+Throughput: 0.46 requests/s
+
+Average latency: 29.69 s
+Average latency per token: 0.04 s
+Average latency per output token: 0.05 s
+
+Total energy (Zeus): 511598.66 J
+Total energy (Individual responses): 1376524.09 J
+Total prompt tokens: 523964
+Total completion tokens: 1183781
+
+Based on Zeus
+Energy per request: 511.60 J
+Energy per token: 0.43 J
+
+Based on individual responses
+Energy per request: 1376.52 J
+Energy per token: 1.16 J
+
