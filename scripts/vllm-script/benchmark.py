@@ -220,7 +220,7 @@ def main(args: argparse.Namespace):
     input_requests = get_requests(args.dataset)
 
     # run multiple times to warm up
-    for i in range(arg.num_runs):
+    for i in range(args.num_runs):
         run_benchmark(args, api_url, input_requests, out_filename+f"-run{i}.txt")
 
 
