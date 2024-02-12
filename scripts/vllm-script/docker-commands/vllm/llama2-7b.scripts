@@ -3,7 +3,7 @@
 
 ############################## GPU 0 ##############################
 # vllm
-docker run --gpus device=0 --shm-size 1g -p 8000:80 \
+docker run --gpus device=0 --shm-size 1g -p 8000:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
@@ -24,14 +24,15 @@ docker run \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host vllm0_llama7 \
-        --port 80 \
+        --port 8000 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/vllm-llama2-7b-rr025 \
-        --request-rate 0.25
+        --request-rate 0.25 \
+        --num-runs 1
 
 ############################## GPU 1 ##############################
 # vllm
-docker run --gpus device=1 --shm-size 1g -p 8001:80 \
+docker run --gpus device=1 --shm-size 1g -p 8001:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
@@ -52,15 +53,16 @@ docker run \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host vllm1_llama7 \
-        --port 80 \
+        --port 8000 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/vllm-llama2-7b-rr050 \
-        --request-rate 0.5
+        --request-rate 0.5 \
+        --num-runs 1
 
 
 ############################## GPU 2 ##############################
 # vllm
-docker run --gpus device=2 --shm-size 1g -p 8002:80 \
+docker run --gpus device=2 --shm-size 1g -p 8002:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
@@ -81,14 +83,15 @@ docker run \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host vllm2_llama7 \
-        --port 80 \
+        --port 8000 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/vllm-llama2-7b-rr075 \
-        --request-rate 0.75
+        --request-rate 0.75 \
+        --num-runs 1
 
 ############################## GPU 3 ##############################
 # vllm
-docker run --gpus device=3 --shm-size 1g -p 8003:80 \
+docker run --gpus device=3 --shm-size 1g -p 8003:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
@@ -109,7 +112,23 @@ docker run \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host vllm3_llama7 \
-        --port 80 \
+        --port 8000 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/vllm-llama2-7b-rr100 \
-        --request-rate 1
+        --request-rate 1 \
+        --num-runs 1
+
+
+
+
+
+
+# python benchmark.py \
+#         --backend vllm \
+#         --dataset ../../sharegpt/ShareGPT_V3_filtered_1000.json \
+#         --host 127.0.0.1 \
+#         --port 8001 \
+#         --model meta-llama/Llama-2-7b-chat-hf \
+#         --out-filename /results/vllm-llama2-7b-rr050 \
+#         --request-rate 0.5 \
+#         --num-runs 1

@@ -27,7 +27,8 @@ docker run \
         --port 80 \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr025 \
-        --request-rate 0.25
+        --request-rate 0.25 \
+        --num-runs 1
 
 
 ############################## GPU 1 ##############################
@@ -56,7 +57,8 @@ docker run \
         --port 80 \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr050 \
-        --request-rate 0.5
+        --request-rate 0.5 \
+        --num-runs 1
 
 
 ############################## GPU 2 ##############################
@@ -85,7 +87,8 @@ docker run \
         --port 80 \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr075 \
-        --request-rate 0.75
+        --request-rate 0.75 \
+        --num-runs 1
 
 
 ############################## GPU 3 ##############################
@@ -114,4 +117,5 @@ docker run \
         --port 80 \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr100 \
-        --request-rate 1
+        --request-rate 1 \
+        --num-runs 1

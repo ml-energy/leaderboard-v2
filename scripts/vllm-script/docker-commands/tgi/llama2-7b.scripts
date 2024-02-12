@@ -27,7 +27,8 @@ docker run \
         --port 80 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr025 \
-        --request-rate 0.25
+        --request-rate 0.25 \
+        --num-runs 1
 
 ############################## GPU 1 ##############################
 # TGI
@@ -55,7 +56,8 @@ docker run \
         --port 80 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr050 \
-        --request-rate 0.5
+        --request-rate 0.5 \
+        --num-runs 1
 
 
 ############################## GPU 2 ##############################
@@ -84,7 +86,8 @@ docker run \
         --port 80 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr075 \
-        --request-rate 0.75
+        --request-rate 0.75 \
+        --num-runs 1
 
 ############################## GPU 3 ##############################
 # TGI
@@ -112,4 +115,5 @@ docker run \
         --port 80 \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr100 \
-        --request-rate 1
+        --request-rate 1 \
+        --num-runs 1

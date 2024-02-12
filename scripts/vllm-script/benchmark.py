@@ -83,7 +83,7 @@ async def send_request(
     # headers = {"User-Agent": "Benchmark Client"}
     headers = {"Content-Type": "application/json"}
     # Both tgi and vllm support OpenAI Chat Completion API
-    if backend in ["tgi" or "vllm"]:
+    if backend in ["tgi", "vllm"]:
         pload = {
             "model": model,
             "messages": [
