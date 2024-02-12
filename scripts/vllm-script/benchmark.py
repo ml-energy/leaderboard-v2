@@ -217,12 +217,12 @@ def main(args: argparse.Namespace):
     for i in range(args.num_runs):
         run_benchmark(args, api_url, input_requests, out_filename+f"-run{i}.txt")
 
-    # TODO: concurrency bug. Currently accumlulates TOTAL_ENERGY across sequential runs
-    # reset global variables
-    REQUEST_LATENCY = []
-    TOTAL_ENERGY = 0
-    TOTAL_PROMPT_TOKENS = 0
-    TOTAL_COMPLETION_TOKENS = 0
+        # TODO: concurrency bug. Currently accumlulates TOTAL_ENERGY across sequential runs
+        # reset global variables
+        REQUEST_LATENCY = []
+        TOTAL_ENERGY = 0
+        TOTAL_PROMPT_TOKENS = 0
+        TOTAL_COMPLETION_TOKENS = 0
 
 
 if __name__ == "__main__":
