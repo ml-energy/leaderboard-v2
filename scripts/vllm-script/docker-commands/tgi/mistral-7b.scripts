@@ -25,6 +25,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi0_mistral \
         --port 80 \
+        --external-energy True \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr025 \
         --request-rate 0.25 \
@@ -55,6 +56,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi1_mistral \
         --port 80 \
+        --external-energy True \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr050 \
         --request-rate 0.5 \
@@ -85,6 +87,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi2_mistral \
         --port 80 \
+        --external-energy True \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr075 \
         --request-rate 0.75 \
@@ -115,6 +118,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi3_mistral \
         --port 80 \
+        --external-energy True \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr100 \
         --request-rate 1 \

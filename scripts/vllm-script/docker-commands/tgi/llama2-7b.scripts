@@ -25,6 +25,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi0_llama7 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr025 \
         --request-rate 0.25 \
@@ -54,6 +55,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi1_llama7 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr050 \
         --request-rate 0.5 \
@@ -84,6 +86,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi2_llama7 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr075 \
         --request-rate 0.75 \
@@ -113,6 +116,7 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi3_llama7 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/tgi-llama2-7b-rr100 \
         --request-rate 1 \

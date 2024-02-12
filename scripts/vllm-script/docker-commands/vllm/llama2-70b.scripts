@@ -1,21 +1,24 @@
 #!/bin/bash
 ### Llama-2-70b
 
-############################## GPU 0 ##############################
+############################## vLLM server ##############################
+
 # vllm
-docker run --gpus device=0 --shm-size 1g -p 8000:8000 \
+docker run --gpus all --shm-size 1g -p 8000:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
         -v ~/.cache/huggingface:/root/.cache/huggingface \
-        --name vllm0_llama70 \
+        --name vllm_llama70 \
         -d vllm/vllm-openai:latest \
         --tensor-parallel-size 4 \
         --model meta-llama/Llama-2-70b-chat-hf
 
+############################## GPUs all, rr=0.25 ##############################
+
 # Benchmark
 docker run \
-        --gpus device=0 \
+        --gpus all \
         --name llama70_25 \
         --network benchmark-net \
         -v /home/ohjun/leaderboard/sharegpt:/data \
@@ -23,28 +26,17 @@ docker run \
         -d benchmark:latest \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
-        --host vllm0_llama70 \
+        --host vllm_llama70 \
         --port 8000 \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/vllm-llama2-70b-rr025 \
         --request-rate 0.25 \
         --num-runs 1
 
-############################## GPU 1 ##############################
-# vllm
-docker run --gpus device=1 --shm-size 1g -p 8001:8000 \
-        --runtime nvidia \
-        --network benchmark-net \
-        -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v ~/.cache/huggingface:/root/.cache/huggingface \
-        --name vllm1_llama70 \
-        -d vllm/vllm-openai:latest \
-        --tensor-parallel-size 4 \
-        --model meta-llama/Llama-2-70b-chat-hf
-
+############################## GPUs all, rr=0.50 ##############################
 # Benchmark
 docker run \
-        --gpus device=1 \
+        --gpus all \
         --name llama70_50 \
         --network benchmark-net \
         -v /home/ohjun/leaderboard/sharegpt:/data \
@@ -52,7 +44,7 @@ docker run \
         -d benchmark:latest \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
-        --host vllm1_llama70 \
+        --host vllm_llama70 \
         --port 8000 \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/vllm-llama2-70b-rr050 \
@@ -60,21 +52,10 @@ docker run \
         --num-runs 1
 
 
-############################## GPU 2 ##############################
-# vllm
-docker run --gpus device=2 --shm-size 1g -p 8002:8000 \
-        --runtime nvidia \
-        --network benchmark-net \
-        -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v ~/.cache/huggingface:/root/.cache/huggingface \
-        --name vllm2_llama70 \
-        -d vllm/vllm-openai:latest \
-        --tensor-parallel-size 4 \
-        --model meta-llama/Llama-2-70b-chat-hf
-
+############################## GPUs all, rr=0.75 ##############################
 # Benchmark
 docker run \
-        --gpus device=2 \
+        --gpus all \
         --name llama70_75 \
         --network benchmark-net \
         -v /home/ohjun/leaderboard/sharegpt:/data \
@@ -82,28 +63,17 @@ docker run \
         -d benchmark:latest \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
-        --host vllm2_llama70 \
+        --host vllm_llama70 \
         --port 8000 \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/vllm-llama2-70b-rr075 \
         --request-rate 0.75 \
         --num-runs 1
 
-############################## GPU 3 ##############################
-# vllm
-docker run --gpus device=3 --shm-size 1g -p 8003:8000 \
-        --runtime nvidia \
-        --network benchmark-net \
-        -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v ~/.cache/huggingface:/root/.cache/huggingface \
-        --name vllm3_llama70 \
-        -d vllm/vllm-openai:latest \
-        --tensor-parallel-size 4 \
-        --model meta-llama/Llama-2-70b-chat-hf
-
+############################## GPUs all, rr=1.00 ##############################
 # Benchmark
 docker run \
-        --gpus device=3 \
+        --gpus all \
         --name llama70_1 \
         --network benchmark-net \
         -v /home/ohjun/leaderboard/sharegpt:/data \
@@ -111,7 +81,7 @@ docker run \
         -d benchmark:latest \
         --backend vllm \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
-        --host vllm3_llama70 \
+        --host vllm_llama70 \
         --port 8000 \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/vllm-llama2-70b-rr100 \

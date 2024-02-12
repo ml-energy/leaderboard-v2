@@ -1,17 +1,19 @@
 #!/bin/bash
 ### Llama-2-70b
 
-############################## GPU 0 ##############################
+############################## TGI server ##############################
 # TGI
-docker run --gpus device=0 --shm-size 1g -p 8000:80 \
+docker run --gpus device=0 --shm-size 1g -p 8000:80 \ #TODO fix
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
         -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
-        --name tgi0_llama70 \
+        --name tgi_llama70 \
         -d tgi \
         --tokenizer-config-path /app/tokenizer_config.json \
         --num-shard 4 \
         --model-id meta-llama/Llama-2-70b-chat-hf
+
+############################## GPU all, rr=0.25 ##############################
 
 # Benchmark
 docker run \
@@ -25,23 +27,13 @@ docker run \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
         --host tgi0_llama70 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/tgi-llama2-70b-rr025 \
         --request-rate 0.25 \
         --num-runs 1
 
-############################## GPU 1 ##############################
-# TGI
-docker run --gpus device=1 --shm-size 1g -p 8001:80 \
-        --network benchmark-net \
-        -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
-        --name tgi1_llama70 \
-        -d tgi \
-        --tokenizer-config-path /app/tokenizer_config.json \
-        --num-shard 4 \
-        --model-id meta-llama/Llama-2-70b-chat-hf
-
+############################## GPU all, rr=0.50 ##############################
 # Benchmark
 docker run \
         --gpus device=1 \
@@ -52,26 +44,16 @@ docker run \
         -d benchmark:latest \
         --backend tgi \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
-        --host tgi1_llama70 \
+        --host tgi_llama70 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/tgi-llama2-70b-rr050 \
         --request-rate 0.5 \
         --num-runs 1
 
 
-############################## GPU 2 ##############################
-# TGI
-docker run --gpus device=2 --shm-size 1g -p 8002:80 \
-        --network benchmark-net \
-        -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
-        --name tgi2_llama70 \
-        -d tgi \
-        --tokenizer-config-path /app/tokenizer_config.json \
-        --num-shard 4 \
-        --model-id meta-llama/Llama-2-70b-chat-hf
-
+############################## GPU all, rr=0.75 ##############################
 # Benchmark
 docker run \
         --gpus device=2 \
@@ -82,25 +64,15 @@ docker run \
         -d benchmark:latest \
         --backend tgi \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
-        --host tgi2_llama70 \
+        --host tgi_llama70 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/tgi-llama2-70b-rr075 \
         --request-rate 0.75 \
         --num-runs 1
 
-############################## GPU 3 ##############################
-# TGI
-docker run --gpus device=3 --shm-size 1g -p 8003:80 \
-        --network benchmark-net \
-        -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
-        --name tgi3_llama70 \
-        -d tgi \
-        --tokenizer-config-path /app/tokenizer_config.json \
-        --num-shard 4 \
-        --model-id meta-llama/Llama-2-70b-chat-hf
-
+############################## GPU all, rr=1.00 ##############################
 # Benchmark
 docker run \
         --gpus device=3 \
@@ -111,8 +83,9 @@ docker run \
         -d benchmark:latest \
         --backend tgi \
         --dataset /data/ShareGPT_V3_filtered_1000.json \
-        --host tgi3_llama70 \
+        --host tgi_llama70 \
         --port 80 \
+        --external-energy True \
         --model meta-llama/Llama-2-70b-chat-hf \
         --out-filename /results/tgi-llama2-70b-rr100 \
         --request-rate 1 \
