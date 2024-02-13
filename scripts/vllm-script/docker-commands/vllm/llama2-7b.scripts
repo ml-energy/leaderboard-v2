@@ -30,6 +30,23 @@ docker run \
         --request-rate 0.25 \
         --num-runs 1
 
+# Benchmark
+docker run \
+        --gpus device=0 \
+        --name llama7_125 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm0_llama7 \
+        --port 8000 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr125 \
+        --request-rate 1.25 \
+        --num-runs 1
+
 ############################## GPU 1 ##############################
 # vllm
 docker run --gpus device=1 --shm-size 1g -p 8001:8000 \
@@ -57,6 +74,23 @@ docker run \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/vllm-llama2-7b-rr050 \
         --request-rate 0.5 \
+        --num-runs 1
+
+# Benchmark
+docker run \
+        --gpus device=1 \
+        --name llama7_150 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm1_llama7 \
+        --port 8000 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr150 \
+        --request-rate 1.5 \
         --num-runs 1
 
 
@@ -89,6 +123,23 @@ docker run \
         --request-rate 0.75 \
         --num-runs 1
 
+# Benchmark
+docker run \
+        --gpus device=2 \
+        --name llama7_175 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm2_llama7 \
+        --port 8000 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr175 \
+        --request-rate 1.75 \
+        --num-runs 1
+
 ############################## GPU 3 ##############################
 # vllm
 docker run --gpus device=3 --shm-size 1g -p 8003:8000 \
@@ -116,6 +167,23 @@ docker run \
         --model meta-llama/Llama-2-7b-chat-hf \
         --out-filename /results/vllm-llama2-7b-rr100 \
         --request-rate 1 \
+        --num-runs 1
+
+# Benchmark
+docker run \
+        --gpus device=3 \
+        --name llama7_2 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend vllm \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host vllm3_llama7 \
+        --port 8000 \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/vllm-llama2-7b-rr200 \
+        --request-rate 2 \
         --num-runs 1
 
 
