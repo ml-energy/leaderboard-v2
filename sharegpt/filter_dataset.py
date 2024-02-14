@@ -97,9 +97,9 @@ def main():
     #     json.dump(new_dataset, f)
 
     new_dataset = filter_dataset_to_size(
-        "ShareGPT_V3_filtered.json", 1000
+        "ShareGPT_V3_filtered.json", 500
     )
-    with open("ShareGPT_V3_filtered_1000.json", "w") as f:
+    with open("ShareGPT_V3_filtered_500.json", "w") as f:
         json.dump(new_dataset, f)
 
     print(f"New dataset size: {len(new_dataset)}")

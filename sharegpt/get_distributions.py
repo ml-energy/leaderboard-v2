@@ -9,7 +9,8 @@ from transformers import (
 )
 
 # Open datasets
-file_paths = ['ShareGPT_V3_filtered.json', 'ShareGPT_V3_filtered_1000.json']
+file_paths = ['ShareGPT_V3_filtered.json', 'ShareGPT_V3_filtered_500.json']
+# file_paths = ['ShareGPT_V3_filtered.json', 'ShareGPT_V3_filtered_1000.json']
 names = [file_path[:-5] for file_path in file_paths]
 
 data_lists =[]
