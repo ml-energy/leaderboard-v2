@@ -31,3 +31,7 @@ tgi,mistralai/Mistral-7B-Instruct-v0.2,1.25,1.19,23.99,217.47
 tgi,mistralai/Mistral-7B-Instruct-v0.2,1.5,1.42,26.65,175.94
 tgi,mistralai/Mistral-7B-Instruct-v0.2,1.75,1.63,30.07,154.09
 tgi,mistralai/Mistral-7B-Instruct-v0.2,2,1.84,31.15,138.39
+vllm,meta-llama/Llama-2-7b-chat-hf,1.25,1.18,41.61,244.42
+vllm,meta-llama/Llama-2-7b-chat-hf,1.5,1.32,67.82,214.77
+vllm,meta-llama/Llama-2-7b-chat-hf,1.75,1.29,116.27,219.9
+vllm,meta-llama/Llama-2-7b-chat-hf,2,1.33,138.79,214.94

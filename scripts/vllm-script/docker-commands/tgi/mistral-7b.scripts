@@ -48,6 +48,23 @@ docker run \
         --request-rate 1.25 \
         --num-runs 1
 
+docker run \
+        --gpus device=0 \
+        --name mistral7_225 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi0_mistral \
+        --port 80 \
+        --external-energy True \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr225 \
+        --request-rate 2.25 \
+        --num-runs 1
+
 
 ############################## GPU 1 ##############################
 # TGI
@@ -95,6 +112,24 @@ docker run \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr150 \
         --request-rate 1.5 \
+        --num-runs 1
+
+# Benchmark
+docker run \
+        --gpus device=1 \
+        --name mistral7_250 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi1_mistral \
+        --port 80 \
+        --external-energy True \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr250 \
+        --request-rate 2.5 \
         --num-runs 1
 
 
@@ -146,6 +181,24 @@ docker run \
         --request-rate 1.75 \
         --num-runs 1
 
+# Benchmark
+docker run \
+        --gpus device=2 \
+        --name mistral7_275 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi2_mistral \
+        --port 80 \
+        --external-energy True \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr275 \
+        --request-rate 2.75 \
+        --num-runs 1
+
 
 ############################## GPU 3 ##############################
 # TGI
@@ -193,4 +246,22 @@ docker run \
         --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
         --out-filename /results/tgi-mistral-7b-rr200 \
         --request-rate 2 \
+        --num-runs 1
+
+# Benchmark
+docker run \
+        --gpus device=3 \
+        --name mistral7_3 \
+        --network benchmark-net \
+        -v /home/ohjun/leaderboard/sharegpt:/data \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/results:/results \
+        -d benchmark:latest \
+        --backend tgi \
+        --dataset /data/ShareGPT_V3_filtered_1000.json \
+        --host tgi3_mistral \
+        --port 80 \
+        --external-energy True \
+        --model mistralai/Misbenchmarktral-7B-Instruct-v0.2 \
+        --out-filename /results/tgi-mistral-7b-rr300 \
+        --request-rate 3 \
         --num-runs 1
