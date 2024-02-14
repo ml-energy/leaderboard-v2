@@ -6,7 +6,7 @@
 docker run --gpus device=0 --shm-size 1g -p 8000:80 \ #TODO fix
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
         --name tgi_llama70 \
         -d tgi \
         --tokenizer-config-path /app/tokenizer_config.json \

@@ -18,7 +18,7 @@ python benchmark.py \
 docker run --gpus device=0 --shm-size 1g -p 8000:80 \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
         --name tgi0_llama7 \
         -d tgi \
         --tokenizer-config-path /app/tokenizer_config.json \
@@ -65,7 +65,7 @@ docker run \
 docker run --gpus device=1 --shm-size 1g -p 8001:80 \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
         --name tgi1_llama7 \
         -d tgi \
         --tokenizer-config-path /app/tokenizer_config.json \
@@ -112,7 +112,7 @@ docker run \
 docker run --gpus device=2 --shm-size 1g -p 8002:80 \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
         --name tgi2_llama7 \
         -d tgi \
         --tokenizer-config-path /app/tokenizer_config.json \
@@ -159,7 +159,7 @@ docker run \
 docker run --gpus device=3 --shm-size 1g -p 8003:80 \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/Llama-2-tokenizer_config.json:/app/tokenizer_config.json \
         --name tgi3_llama7 \
         -d tgi \
         --tokenizer-config-path /app/tokenizer_config.json \

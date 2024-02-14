@@ -7,7 +7,7 @@ docker run --gpus device=0 --shm-size 1g -p 8000:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/mistral-chat-template.jinja:/mistral-chat-template.jinja \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/mistral-chat-template.jinja:/mistral-chat-template.jinja \
         -v ~/.cache/huggingface:/root/.cache/huggingface \
         --name vllm0_mistral \
         -d vllm/vllm-openai:latest \
@@ -39,7 +39,7 @@ docker run --gpus device=1 --shm-size 1g -p 8001:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/mistral-chat-template.jinja:/mistral-chat-template.jinja \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/mistral-chat-template.jinja:/mistral-chat-template.jinja \
         -v ~/.cache/huggingface:/root/.cache/huggingface \
         --name vllm1_mistral \
         -d vllm/vllm-openai:latest \
@@ -71,7 +71,7 @@ docker run --gpus device=2 --shm-size 1g -p 8002:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/mistral-chat-template.jinja:/mistral-chat-template.jinja \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/mistral-chat-template.jinja:/mistral-chat-template.jinja \
         -v ~/.cache/huggingface:/root/.cache/huggingface \
         --name vllm2_mistral \
         -d vllm/vllm-openai:latest \
@@ -103,7 +103,7 @@ docker run --gpus device=3 --shm-size 1g -p 8003:8000 \
         --runtime nvidia \
         --network benchmark-net \
         -e HUGGING_FACE_HUB_TOKEN=$token \
-        -v $PWD/mistral-chat-template.jinja:/mistral-chat-template.jinja \
+        -v /home/ohjun/leaderboard/scripts/vllm-script/local-tokenizers/mistral-chat-template.jinja:/mistral-chat-template.jinja \
         -v ~/.cache/huggingface:/root/.cache/huggingface \
         --name vllm3_mistral \
         -d vllm/vllm-openai:latest \
