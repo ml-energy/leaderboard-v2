@@ -15,14 +15,15 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
+
 def filter_dataset_to_size(
     dataset_path: str,
     size: int,
-) ->  List[Tuple[str, int, int]]:
+) -> List[Tuple[str, int, int]]:
     # Load the dataset.
     with open(dataset_path) as f:
         dataset = json.load(f)
-    
+
     # randomly sample dataset
     return random.sample(dataset, size)
 
@@ -70,7 +71,7 @@ def filter_dataset(
             continue
         # making even shorter than 1024 to account for additional tokens introduced by chat completion wrapper
         if prompt_len > 800 or output_len > 800:
-        # if prompt_len > 1024 or output_len > 1024:
+            # if prompt_len > 1024 or output_len > 1024:
             # Prune too long sequences.
             continue
         filtered_dataset_json.append(
@@ -89,20 +90,17 @@ def filter_dataset(
 
 
 def main():
-    # tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
-    # new_dataset = filter_dataset(
-    #     "ShareGPT_V3_unfiltered_cleaned_split.json", tokenizer
-    # )
-    # with open("ShareGPT_V3_filtered.json", "w") as f:
-    #     json.dump(new_dataset, f)
-
-    new_dataset = filter_dataset_to_size(
-        "ShareGPT_V3_filtered.json", 500
+    tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
+    # download: https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
+    filtered_dataset = filter_dataset(
+        "ShareGPT_V3_unfiltered_cleaned_split.json", tokenizer
     )
-    with open("ShareGPT_V3_filtered_500.json", "w") as f:
-        json.dump(new_dataset, f)
+    with open("ShareGPT_V3_filtered.json", "w") as f:
+        json.dump(filtered_dataset, f)
 
-    print(f"New dataset size: {len(new_dataset)}")
+    sampled_dataset = filter_dataset_to_size("ShareGPT_V3_filtered.json", 500)
+    with open("ShareGPT_V3_filtered_500.json", "w") as f:
+        json.dump(sampled_dataset, f)
 
 
 if __name__ == "__main__":

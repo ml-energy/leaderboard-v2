@@ -41,8 +41,18 @@ python sort.py --data-dir sg_90k_part1_html_cleaned_lang_first_sampled.json --ou
 https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 ```
 
-### Filter too long prompts and extract first prompt
+### Install Transformers
 ```
 pip install transformers
+```
+
+### Filter conversations with too long prompts/responses, extract first turn, and randomly sample 500 prompts
+```
 python filter_dataset.py
+```
+
+### Compare the response length distribution of sampled dataset with respect to initial dataset
+```
+pip install matplotlib numpy
+python compare_distributions.py
 ```
