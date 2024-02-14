@@ -1,6 +1,18 @@
 #!/bin/bash
 ### Llama-2-7b
 
+python benchmark.py \
+        --backend tgi \
+        --dataset ../../sharegpt/ShareGPT_V3_filtered_500.json \
+        --host 127.0.0.1 \
+        --port 8000 \
+        --external-energy True \
+        --model meta-llama/Llama-2-7b-chat-hf \
+        --out-filename /results/tgi-llama2-7b-rr025 \
+        --request-rate 0.25 \
+        --num-runs 1
+
+
 ############################## GPU 0 ##############################
 # TGI
 docker run --gpus device=0 --shm-size 1g -p 8000:80 \

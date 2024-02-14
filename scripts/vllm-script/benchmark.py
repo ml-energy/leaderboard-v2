@@ -22,7 +22,7 @@ TOTAL_ENERGY = 0
 TOTAL_PROMPT_TOKENS = 0
 TOTAL_COMPLETION_TOKENS = 0
 
-
+# TODO: format and write results as JSON
 # @dataclass
 # class Results:
 #     total_time: float
@@ -32,7 +32,7 @@ TOTAL_COMPLETION_TOKENS = 0
 #     energy_per_request: float
 #     energy_per_token: float
 #     results: list[Result]
-#     ? server: str ? (tgi vs vllm) TODO
+#     ? server: str ? (tgi vs vllm) TODO: is this info worth storing?
 
 # @dataclass
 # class Result:in py
@@ -122,9 +122,7 @@ async def send_request(
     )
 
     # track energy usage
-    global TOTAL_ENERGY
-    global TOTAL_PROMPT_TOKENS
-    global TOTAL_COMPLETION_TOKENS
+    global TOTAL_ENERGY, TOTAL_PROMPT_TOKENS, TOTAL_COMPLETION_TOKENS
     if external_energy:
         TOTAL_ENERGY += output["usage"]["energy"]
     TOTAL_PROMPT_TOKENS += output["usage"]["prompt_tokens"]
@@ -171,6 +169,7 @@ def run_benchmark(
     measurements = zeus_monitor.end_window(out_filename)
     zeus_total_energy = measurements.total_energy
 
+    global REQUEST_LATENCY, TOTAL_ENERGY, TOTAL_PROMPT_TOKENS, TOTAL_COMPLETION_TOKENS
     with open(out_filename, "w") as f:
         benchmark_time = benchmark_end_time - benchmark_start_time
         f.write(f"Total time: {benchmark_time:.2f} s\n")
@@ -215,6 +214,12 @@ def run_benchmark(
             energy_per_token = TOTAL_ENERGY / TOTAL_COMPLETION_TOKENS
             f.write(f"Energy per token: {energy_per_token:.2f} J\n\n")
 
+    # reset global variables only after current run is complete
+    REQUEST_LATENCY = []
+    TOTAL_ENERGY = 0
+    TOTAL_PROMPT_TOKENS = 0
+    TOTAL_COMPLETION_TOKENS = 0
+
     print("Benchmark results written to", out_filename)
 
 
@@ -230,14 +235,6 @@ def main(args: argparse.Namespace):
     # run multiple times to warm up
     for i in range(args.num_runs):
         run_benchmark(args, api_url, input_requests, out_filename + f"-run{i}.txt")
-
-        # TODO: concurrency bug. Currently accumlulates global vars across sequential runs
-        # reset global variables
-        REQUEST_LATENCY = []
-        if args.external_energy:
-            TOTAL_ENERGY = 0
-        TOTAL_PROMPT_TOKENS = 0
-        TOTAL_COMPLETION_TOKENS = 0
 
 
 if __name__ == "__main__":
