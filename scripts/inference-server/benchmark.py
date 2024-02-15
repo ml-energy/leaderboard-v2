@@ -32,7 +32,7 @@ TOTAL_COMPLETION_TOKENS = 0
 #     energy_per_request: float
 #     energy_per_token: float
 #     results: list[Result]
-#     ? server: str ? (tgi vs vllm) TODO: is this info worth storing?
+#     backend: str
 
 # @dataclass
 # class Result:in py
@@ -40,6 +40,7 @@ TOTAL_COMPLETION_TOKENS = 0
 #     response: str
 #     prompt_len_in_tokens: int
 #     response_len_in_tokens: int
+#     token_energies: list[float]
 
 
 def get_requests(
