@@ -11,36 +11,45 @@ from typing import AsyncGenerator, List, Tuple
 
 import aiohttp
 import numpy as np
+from dataclasses import dataclass, asdict
 from tqdm.asyncio import tqdm
 from zeus.monitor import ZeusMonitor
 
 
-# (prompt len, output len, latency)
-REQUEST_LATENCY: List[Tuple[int, int, float]] = []
 SYSTEM_PROMPT = "A chat between a human user (prompter) and an artificial intelligence (AI) assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. "
-TOTAL_ENERGY = 0
-TOTAL_PROMPT_TOKENS = 0
-TOTAL_COMPLETION_TOKENS = 0
 
-# TODO: format and write results as JSON
-# @dataclass
-# class Results:
-#     total_time: float
-#     total_energy: float
-#     time_per_request: float
-#     time_per_token: float
-#     energy_per_request: float
-#     energy_per_token: float
-#     results: list[Result]
-#     backend: str
 
-# @dataclass
-# class Result:in py
-#     prompt: str
-#     response: str
-#     prompt_len_in_tokens: int
-#     response_len_in_tokens: int
-#     token_energies: list[float]
+@dataclass
+class Results:
+    # todo: add model + other metadata
+    model: str
+    backend: str
+    request_rate: float
+    total_time: float
+    throughput: float
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    avg_latency: float
+    avg_latency_per_token: float
+    avg_latency_per_output_token: float
+    server_total_energy: float
+    server_energy_per_request: float
+    server_energy_per_output_token: float
+    local_zeus_total_energy: float
+    local_zeus_energy_per_request: float
+    local_zeus_energy_per_output_token: float
+    system_prompt: str
+    results: list["Result"]
+
+
+@dataclass
+class Result:
+    latency: float
+    prompt: str
+    response: str
+    num_prompt_tokens: int
+    num_completion_tokens: int
+    energy: float
 
 
 def get_requests(
@@ -60,8 +69,8 @@ async def get_request(
     request_rate: float,
 ) -> AsyncGenerator[Tuple[str, int, int], None]:
     input_requests = iter(input_requests)
-    for request in input_requests:
-        yield request
+    for i, request in enumerate(input_requests):
+        yield i, request
 
         if request_rate == float("inf"):
             # If the request rate is infinity, then we don't need to wait.
@@ -73,6 +82,7 @@ async def get_request(
 
 
 async def send_request(
+    result: Result,
     backend: str,
     model: str,
     api_url: str,
@@ -112,26 +122,19 @@ async def send_request(
                 break
 
     request_end_time = time.perf_counter()
-    request_latency = request_end_time - request_start_time
-    REQUEST_LATENCY.append(
-        (
-            output["usage"]["prompt_tokens"],
-            output["usage"]["completion_tokens"],
-            request_latency,
-        )
-    )
 
-    # track energy usage
-    global TOTAL_ENERGY, TOTAL_PROMPT_TOKENS, TOTAL_COMPLETION_TOKENS
-    if external_energy:
-        TOTAL_ENERGY += output["usage"]["energy"]
-    TOTAL_PROMPT_TOKENS += output["usage"]["prompt_tokens"]
-    TOTAL_COMPLETION_TOKENS += output["usage"]["completion_tokens"]
+    result.latency = request_end_time - request_start_time
+    result.prompt = prompt
+    result.response = output["choices"][0]["message"]["content"]
+    result.num_prompt_tokens = output["usage"]["prompt_tokens"]
+    result.num_completion_tokens = output["usage"]["completion_tokens"]
+    result.energy = output["usage"]["energy"]
 
     pbar.update(1)
 
 
 async def benchmark(
+    results: Results,
     backend: str,
     model: str,
     api_url: str,
@@ -141,10 +144,19 @@ async def benchmark(
 ) -> None:
     tasks: List[asyncio.Task] = []
     pbar = tqdm(total=len(input_requests))
-    async for request in get_request(input_requests, request_rate):
+    async for i, request in get_request(input_requests, request_rate):
         prompt = request
         task = asyncio.create_task(
-            send_request(backend, model, api_url, prompt, external_energy, pbar)
+            # Ensures results has same ordering as the input dataset
+            send_request(
+                results.results[i],
+                backend,
+                model,
+                api_url,
+                prompt,
+                external_energy,
+                pbar,
+            )
         )
         tasks.append(task)
     await asyncio.gather(*tasks)
@@ -154,11 +166,43 @@ async def benchmark(
 def run_benchmark(
     args: argparse.Namespace, api_url: str, input_requests: List[str], out_filename: str
 ):
+    results = Results(
+        model=args.model,
+        backend=args.backend,
+        request_rate=args.request_rate,
+        total_time=0,
+        throughput=0,
+        total_prompt_tokens=0,
+        total_completion_tokens=0,
+        avg_latency=0,
+        avg_latency_per_token=0,
+        avg_latency_per_output_token=0,
+        server_total_energy=0,
+        server_energy_per_request=0,
+        server_energy_per_output_token=0,
+        local_zeus_total_energy=0,
+        local_zeus_energy_per_request=0,
+        local_zeus_energy_per_output_token=0,
+        system_prompt=SYSTEM_PROMPT,
+        results=[
+            Result(
+                latency=0,
+                prompt="",
+                response="",
+                num_prompt_tokens=0,
+                num_completion_tokens=0,
+                energy=0,
+            )
+            for _ in input_requests
+        ],
+    )
+
     zeus_monitor = ZeusMonitor()
     zeus_monitor.begin_window(out_filename)
     benchmark_start_time = time.perf_counter()
     asyncio.run(
         benchmark(
+            results,
             args.backend,
             args.model,
             api_url,
@@ -171,56 +215,62 @@ def run_benchmark(
     measurements = zeus_monitor.end_window(out_filename)
     zeus_total_energy = measurements.total_energy
 
-    global REQUEST_LATENCY, TOTAL_ENERGY, TOTAL_PROMPT_TOKENS, TOTAL_COMPLETION_TOKENS
+    # Store aggregated results
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    total_latency = 0
+    total_latency_per_token = 0
+    total_latency_per_output_token = 0
+    server_total_energy = 0
+    for result in results.results:
+        total_prompt_tokens += result.num_prompt_tokens
+        total_completion_tokens += result.num_completion_tokens
+        total_latency += result.latency
+        total_latency_per_token += result.latency / (
+            result.num_prompt_tokens + result.num_completion_tokens
+        )
+        total_latency_per_output_token += result.latency / result.num_completion_tokens
+        server_total_energy += result.energy
+
+    num_results = len(results.results)
+    results.total_time = benchmark_end_time - benchmark_start_time
+    results.throughput = num_results / results.total_time
+    results.total_prompt_tokens = total_prompt_tokens
+    results.total_completion_tokens = total_completion_tokens
+    results.avg_latency = total_latency / num_results
+    results.avg_latency_per_token = total_latency_per_token / num_results
+    results.avg_latency_per_output_token = total_latency_per_output_token / num_results
+    results.server_total_energy = server_total_energy
+    results.server_energy_per_request = results.server_total_energy / num_results
+    results.server_energy_per_output_token = (
+        results.server_total_energy / results.total_completion_tokens
+    )
+    results.local_zeus_total_energy = zeus_total_energy
+    results.local_zeus_energy_per_request = zeus_total_energy / num_results
+    results.local_zeus_energy_per_output_token = (
+        zeus_total_energy / results.total_completion_tokens
+    )
+
     with open(out_filename, "w") as f:
-        benchmark_time = benchmark_end_time - benchmark_start_time
-        f.write(f"Total time: {benchmark_time:.2f} s\n")
-        f.write(
-            f"Throughput: {len(input_requests) / benchmark_time:.2f} requests/s\n\n"
-        )
+        f.write(json.dumps(asdict(results)))
 
-        # Compute the latency statistics
-        avg_latency = np.mean([latency for _, _, latency in REQUEST_LATENCY])
-        f.write(f"Average latency: {avg_latency:.2f} s\n")
-        avg_per_token_latency = np.mean(
-            [
-                latency / (prompt_len + output_len)
-                for prompt_len, output_len, latency in REQUEST_LATENCY
-            ]
-        )
-        f.write(f"Average latency per token: {avg_per_token_latency:.2f} s\n")
-        avg_per_output_token_latency = np.mean(
-            [latency / output_len for _, output_len, latency in REQUEST_LATENCY]
-        )
-        f.write(
-            "Average latency per output token: "
-            f"{avg_per_output_token_latency:.2f} s\n\n"
-        )
-
-        # Compute the energy statistics
-        f.write(f"Total prompt tokens: {TOTAL_PROMPT_TOKENS}\n")
-        f.write(f"Total completion tokens: {TOTAL_COMPLETION_TOKENS}\n\n")
-
-        f.write("Based on Zeus\n")
-        f.write(f"Total energy (Zeus): {zeus_total_energy:.2f} J\n")
-        f.write(
-            f"Energy per request: {zeus_total_energy / len(input_requests):.2f} J\n"
-        )
-        energy_per_token = zeus_total_energy / TOTAL_COMPLETION_TOKENS
-        f.write(f"Energy per token: {energy_per_token:.2f} J\n\n")
-
-        if args.external_energy:
-            f.write("Based on individual responses\n")
-            f.write(f"Total energy (Individual responses): {TOTAL_ENERGY:.2f} J\n")
-            f.write(f"Energy per request: {TOTAL_ENERGY / len(input_requests):.2f} J\n")
-            energy_per_token = TOTAL_ENERGY / TOTAL_COMPLETION_TOKENS
-            f.write(f"Energy per token: {energy_per_token:.2f} J\n\n")
-
-    # reset global variables only after current run is complete
-    REQUEST_LATENCY = []
-    TOTAL_ENERGY = 0
-    TOTAL_PROMPT_TOKENS = 0
-    TOTAL_COMPLETION_TOKENS = 0
+    if args.verbose:
+        print("Benchmark results:")
+        print(f"Model: {results.model}")
+        print(f"Backend: {results.backend}")
+        print(f"Request rate: {results.request_rate} requests/s")
+        print()
+        print(f"Total time: {results.total_time:.2f} s")
+        print(f"Throughput: {results.throughput:.2f} requests/s")
+        print(f"Average latency: {results.avg_latency:.2f} s")
+        print(f"Average latency per token: {results.avg_latency_per_token:.2f} s")
+        print(f"Average latency per output token: {results.avg_latency_per_output_token:.2f} s")
+        print(f"(Zeus) Total energy: {results.local_zeus_total_energy:.2f} J")
+        print(f"(Zeus) Energy per request: {results.local_zeus_energy_per_request:.2f} J")
+        print(f"(Zeus) Energy per token: {results.local_zeus_energy_per_output_token:.2f} J")
+        print(f"(Server) Total energy: {results.server_total_energy:.2f} J")
+        print(f"(Server) Energy per request: {results.server_energy_per_request:.2f} J")
+        print(f"(Server) Energy per token: {results.server_energy_per_output_token:.2f} J")
 
     print("Benchmark results written to", out_filename)
 
@@ -230,13 +280,13 @@ def main(args: argparse.Namespace):
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-    out_filename = args.out_filename
+    out_name = args.out_name
     api_url = f"{args.protocol}://{args.host}:{args.port}{args.endpoint}"
     input_requests = get_requests(args.dataset)
 
-    # run multiple times to warm up
-    for i in range(args.num_runs):
-        run_benchmark(args, api_url, input_requests, out_filename + f"-run{i}.txt")
+    # Note: output filenames are 1-indexed
+    for i in range(1, args.num_runs + 1):
+        run_benchmark(args, api_url, input_requests, out_name + f"-run{i}.json")
 
 
 if __name__ == "__main__":
@@ -270,16 +320,22 @@ if __name__ == "__main__":
         "the request arrival times.",
     )
     parser.add_argument(
-        "--out-filename",
+        "--out-name",
         type=str,
-        default="benchmark_results.txt",
-        help="Name of file to write benchmark results.",
+        default="benchmark_result",
+        help="Name of file to write benchmark results. Note: '-run{i}.json' will be appended for actual outputted files.",
     )
     parser.add_argument(
         "--external-energy",
         type=bool,
         default=False,
         help="Set to true if inference server has been instrumented to report energy. Otherwise, Zeus will be the only source of energy measurements.",
+    )
+    parser.add_argument(
+        "--verbose",
+        type=bool,
+        default=True,
+        help="Set to true to print out benchmark results. Otherwise, only write to file.",
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
