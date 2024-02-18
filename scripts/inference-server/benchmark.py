@@ -26,6 +26,7 @@ class Results:
     backend: str
     request_rate: float
     results: list["Result"]
+    num_failures: int = 0
     system_prompt: str = SYSTEM_PROMPT
     total_time: float = 0.0
     throughput: float = 0.0
@@ -44,6 +45,7 @@ class Results:
 
 @dataclass
 class Result:
+    success: bool = True
     latency: float = 0.0
     prompt: str = ""
     response: str = ""
@@ -109,17 +111,17 @@ async def send_request(
 
     timeout = aiohttp.ClientTimeout(total=3 * 3600)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        while True:
-            async with session.post(api_url, headers=headers, json=pload) as response:
-                chunks = []
-                async for chunk, _ in response.content.iter_chunks():
-                    chunks.append(chunk)
-            output = b"".join(chunks).decode("utf-8")
-            output = json.loads(output)
-
-            # Re-send the request if it failed.
-            if "error" not in output:
-                break
+        async with session.post(api_url, headers=headers, json=pload) as response:
+            # Request failed
+            if response.status // 100 != 2:
+                result.prompt = prompt
+                result.success = False
+                return
+            chunks = []
+            async for chunk, _ in response.content.iter_chunks():
+                chunks.append(chunk)
+        output = b"".join(chunks).decode("utf-8")
+        output = json.loads(output)
 
     request_end_time = time.perf_counter()
 
@@ -199,6 +201,9 @@ def run_benchmark(
     total_latency_per_output_token = 0
     server_total_energy = 0
     for result in results.results:
+        if not result.success:
+            results.num_failures += 1
+            continue
         total_prompt_tokens += result.num_prompt_tokens
         total_completion_tokens += result.num_completion_tokens
         total_latency += result.latency
@@ -208,7 +213,11 @@ def run_benchmark(
         total_latency_per_output_token += result.latency / result.num_completion_tokens
         server_total_energy += result.energy
 
-    num_results = len(results.results)
+    num_results = len(results.results) - results.num_failures
+    if num_results == 0:
+        print(f"{out_filename} not generated. All requests in this run failed.")
+        return
+
     results.total_time = benchmark_end_time - benchmark_start_time
     results.throughput = num_results / results.total_time
     results.total_prompt_tokens = total_prompt_tokens
