@@ -25,31 +25,31 @@ class Results:
     model: str
     backend: str
     request_rate: float
-    total_time: float
-    throughput: float
-    total_prompt_tokens: int
-    total_completion_tokens: int
-    avg_latency: float
-    avg_latency_per_token: float
-    avg_latency_per_output_token: float
-    server_total_energy: float
-    server_energy_per_request: float
-    server_energy_per_output_token: float
-    local_zeus_total_energy: float
-    local_zeus_energy_per_request: float
-    local_zeus_energy_per_output_token: float
-    system_prompt: str
     results: list["Result"]
+    system_prompt: str = SYSTEM_PROMPT
+    total_time: float = 0.0
+    throughput: float = 0.0
+    total_prompt_tokens: int = 0.0
+    total_completion_tokens: int = 0.0
+    avg_latency: float = 0.0
+    avg_latency_per_token: float = 0.0
+    avg_latency_per_output_token: float = 0.0
+    server_total_energy: float = 0.0
+    server_energy_per_request: float = 0.0
+    server_energy_per_output_token: float = 0.0
+    local_zeus_total_energy: float = 0.0
+    local_zeus_energy_per_request: float = 0.0
+    local_zeus_energy_per_output_token: float = 0.0
 
 
 @dataclass
 class Result:
-    latency: float
-    prompt: str
-    response: str
-    num_prompt_tokens: int
-    num_completion_tokens: int
-    energy: float
+    latency: float = 0.0
+    prompt: str = ""
+    response: str = ""
+    num_prompt_tokens: int = 0
+    num_completion_tokens: int = 0
+    energy: float = 0.0
 
 
 def get_requests(
@@ -170,31 +170,7 @@ def run_benchmark(
         model=args.model,
         backend=args.backend,
         request_rate=args.request_rate,
-        total_time=0,
-        throughput=0,
-        total_prompt_tokens=0,
-        total_completion_tokens=0,
-        avg_latency=0,
-        avg_latency_per_token=0,
-        avg_latency_per_output_token=0,
-        server_total_energy=0,
-        server_energy_per_request=0,
-        server_energy_per_output_token=0,
-        local_zeus_total_energy=0,
-        local_zeus_energy_per_request=0,
-        local_zeus_energy_per_output_token=0,
-        system_prompt=SYSTEM_PROMPT,
-        results=[
-            Result(
-                latency=0,
-                prompt="",
-                response="",
-                num_prompt_tokens=0,
-                num_completion_tokens=0,
-                energy=0,
-            )
-            for _ in input_requests
-        ],
+        results=[Result() for _ in input_requests],
     )
 
     zeus_monitor = ZeusMonitor()
