@@ -21,7 +21,6 @@ SYSTEM_PROMPT = "A chat between a human user (prompter) and an artificial intell
 
 @dataclass
 class Results:
-    # todo: add model + other metadata
     model: str
     backend: str
     request_rate: float
