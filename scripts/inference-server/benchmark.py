@@ -88,41 +88,38 @@ async def send_request(
     model: str,
     api_url: str,
     prompt: str,
-    external_energy: bool,
     pbar: tqdm,
 ) -> None:
     request_start_time = time.perf_counter()
 
     headers = {"Content-Type": "application/json"}
-    # Both tgi and vllm support OpenAI Chat Completion API
-    if backend in ["tgi", "vllm"]:
-        pload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "stream": False,
-            "max_tokens": 1000,
-        }
-    else:
-        raise ValueError(f"Unknown backend: {backend}")
+    # OpenAI Chat Completions API request format
+    pload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "stream": False,
+        "max_tokens": 1000,
+    }
 
     timeout = aiohttp.ClientTimeout(total=3 * 3600)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(api_url, headers=headers, json=pload) as response:
             # Request failed
             if response.status // 100 != 2:
+                print('request failed')
+                print(f"response.status {response.status}")
                 result.prompt = prompt
                 result.success = False
                 return
             chunks = []
             async for chunk, _ in response.content.iter_chunks():
                 chunks.append(chunk)
+        request_end_time = time.perf_counter()
         output = b"".join(chunks).decode("utf-8")
         output = json.loads(output)
-
-    request_end_time = time.perf_counter()
 
     result.latency = request_end_time - request_start_time
     result.prompt = prompt
@@ -141,7 +138,6 @@ async def benchmark(
     api_url: str,
     input_requests: List[str],
     request_rate: float,
-    external_energy: bool,
 ) -> None:
     tasks: List[asyncio.Task] = []
     pbar = tqdm(total=len(input_requests))
@@ -155,7 +151,6 @@ async def benchmark(
                 model,
                 api_url,
                 prompt,
-                external_energy,
                 pbar,
             )
         )
@@ -185,7 +180,6 @@ def run_benchmark(
             api_url,
             input_requests,
             args.request_rate,
-            args.external_energy,
         )
     )
     benchmark_end_time = time.perf_counter()
@@ -236,7 +230,7 @@ def run_benchmark(
     )
 
     with open(out_filename, "w") as f:
-        f.write(json.dumps(asdict(results)))
+        f.write(json.dumps(asdict(results), indent=2))
 
     if args.verbose:
         print("Benchmark results:")
@@ -260,7 +254,16 @@ def run_benchmark(
 
 
 def main(args: argparse.Namespace):
-    print(args)
+    if args.backend not in ["tgi", "vllm"]:
+        raise ValueError(f"Unknown backend: {args.backend}")
+
+    arg_out_filename = f"{args.out_name}-args.json"
+    with open(arg_out_filename, "w") as f:
+        f.write(json.dumps(vars(args), indent=2))
+    if args.verbose:
+        print(args)
+    print("Benchmark args written to", arg_out_filename)
+
     random.seed(args.seed)
     np.random.seed(args.seed)
 
@@ -310,22 +313,11 @@ if __name__ == "__main__":
         help="Name of file to write benchmark results. Note: '-run{i}.json' will be appended for actual outputted files.",
     )
     parser.add_argument(
-        "--external-energy",
-        type=bool,
-        default=False,
-        help="Set to true if inference server has been instrumented to report energy. Otherwise, Zeus will be the only source of energy measurements.",
-    )
-    parser.add_argument(
         "--verbose",
         type=bool,
         default=True,
         help="Set to true to print out benchmark results. Otherwise, only write to file.",
     )
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--trust-remote-code",
-        action="store_true",
-        help="trust remote code from huggingface",
-    )
     args = parser.parse_args()
     main(args)
