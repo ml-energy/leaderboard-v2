@@ -11,7 +11,7 @@ from typing import AsyncGenerator, List, Tuple
 
 import aiohttp
 import numpy as np
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, field
 from tqdm.asyncio import tqdm
 from zeus.monitor import ZeusMonitor
 
@@ -25,7 +25,6 @@ class Results:
     model: str
     backend: str
     request_rate: float
-    results: list["Result"]
     num_failures: int = 0
     system_prompt: str = SYSTEM_PROMPT
     total_time: float = 0.0
@@ -41,6 +40,7 @@ class Results:
     local_zeus_total_energy: float = 0.0
     local_zeus_energy_per_request: float = 0.0
     local_zeus_energy_per_output_token: float = 0.0
+    results: list["Result"] = field(default_factory=list)
 
 
 @dataclass
