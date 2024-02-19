@@ -25,7 +25,7 @@ for name, data_list in zip(names, data_lists):
 # Get prompt lengths using tokenizer
 tokenizer = AutoTokenizer.from_pretrained("huggyllama/llama-7b")
 all_prompts = [
-    [data["conversations"][0]["value"] for data in data_lists]
+    [data["conversations"][0]["value"] for data in data_lists if data["conversations"][0]["from"] == "human"]
     for data_lists in data_lists
 ]
 all_token_ids_per_prompts = [tokenizer(prompts).input_ids for prompts in all_prompts]

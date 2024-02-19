@@ -37,14 +37,14 @@ def filter_dataset(
         dataset = json.load(f)
     # Filter out the conversations with less than 2 turns.
     dataset = [data for data in dataset if len(data["conversations"]) >= 2]
-    # Only keep the first two turns of each conversation.
+    # Only keep the first two turns of each conversation, where the first turn is human.
     dataset = [
         (
             data["id"],
             data["conversations"][0]["value"],
             data["conversations"][1]["value"],
         )
-        for data in dataset
+        for data in dataset if data["conversations"][0]["from"] == "human"
     ]
 
     # Tokenize the prompts and completions.
@@ -98,10 +98,13 @@ def main():
     with open("ShareGPT_V3_filtered.json", "w") as f:
         json.dump(filtered_dataset, f)
 
+    print(f'Created filtered benchmark of size: {len(filtered_dataset)}')
+
     sampled_dataset = filter_dataset_to_size("ShareGPT_V3_filtered.json", 500)
     with open("ShareGPT_V3_filtered_500.json", "w") as f:
         json.dump(sampled_dataset, f)
 
+    print(f'Created sampled benchmark of size: {len(sampled_dataset)}')
 
 if __name__ == "__main__":
     main()

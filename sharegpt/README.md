@@ -46,7 +46,7 @@ https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolv
 pip install transformers
 ```
 
-### Filter conversations with too long prompts/responses, extract first turn, and randomly sample 500 prompts
+### Filter conversations with too long prompts/responses, conversations not started by "human", extract first turn, and randomly sample 500 prompts
 ```
 python filter_dataset.py
 ```
